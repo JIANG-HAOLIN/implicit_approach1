@@ -292,8 +292,8 @@ class ImplicitGenerator(nn.Module):
         else:
 
             # print("rgb size:",rgb.size())
-            # return self.tanh(rgb), None
-            return rgb, None
+            return self.tanh(rgb), None
+            # return rgb, None
 
 
 
