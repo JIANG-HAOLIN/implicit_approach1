@@ -412,7 +412,7 @@ class ModulatedConv2d(nn.Module):
                 clade_bias_init = self.clade_bias_modulation(class_style)
                 out = self.param_free_norm(out)
                 class_weight = F.embedding(label_class_dict, clade_weight_init).permute(0, 3, 1, 2)  # [n, c, h, w]
-
+                ###
                 class_bias = F.embedding(label_class_dict, clade_bias_init).permute(0, 3, 1, 2)  # [n, c, h, w]
                 out = out * class_weight + class_bias
 
