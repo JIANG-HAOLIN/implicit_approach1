@@ -408,7 +408,7 @@ class ModulatedConv2d(nn.Module):
             out = out.view(batch, self.out_channel, height, width)
             if self.clade:
                 clade_weight_init = self.clade_weight_modulation(class_style)
-                # print(clade_weight_init.size())
+                print(clade_weight_init.size())
                 clade_bias_init = self.clade_bias_modulation(class_style)
                 out = self.param_free_norm(out)
                 class_weight = F.embedding(label_class_dict, clade_weight_init).permute(0, 3, 1, 2)  # [n, c, h, w]
