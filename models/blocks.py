@@ -183,10 +183,10 @@ class ModulatedConv2d(nn.Module):
         upsample=False,
         downsample=False,
         blur_kernel=[1, 3, 3, 1],
-        clade = None,
+        approach= -1,
     ):
         super().__init__()
-        self.clade = clade
+        self.approach = approach
         self.eps = 1e-8
         self.kernel_size = kernel_size
         self.in_channel = in_channel
@@ -221,10 +221,18 @@ class ModulatedConv2d(nn.Module):
         self.modulation = EqualLinear(style_dim, in_channel, bias_init=1)
 
         self.demodulate = demodulate
-        if self.clade:
+        if self.approach == 0:
             self.param_free_norm = nn.InstanceNorm2d(self.in_channel, affine=False)  ##jhl
             self.clade_weight_modulation = EqualLinear(style_dim, self.out_channel, bias_init=1) #jhl
             self.clade_bias_modulation = EqualLinear(style_dim, self.out_channel, bias_init=1) #jhl
+        elif self.approach == 1:
+            self.param_free_norm = nn.InstanceNorm2d(self.in_channel, affine=False)  ##jhl
+            self.clade_weight_modulation = EqualLinear(style_dim*2, self.out_channel, bias_init=1)  # jhl
+            self.clade_bias_modulation = EqualLinear(style_dim*2, self.out_channel, bias_init=1)  # jhl
+        elif self.approach == 2:
+            pass
+        else:
+            pass
 
 
 
@@ -390,31 +398,71 @@ class ModulatedConv2d(nn.Module):
 
 
             ## Modulation+CLADE layer
+            if self.approach == 0:
+                style = self.modulation(style).view(batch, 1, in_channel, 1, 1)  ##[1,1,1024,1,1,]
+                ###modulation(style):35x512=>35x1024
+                weight = self.scale * self.weight * style
+                ##[1,512,1024,1,1]
+                if self.demodulate:
+                    demod = torch.rsqrt(weight.pow(2).sum([2, 3, 4]) + 1e-8)
+                    weight = weight * demod.view(batch, self.out_channel, 1, 1, 1)
+                ##[1,512,1024,1,1]
+                weight = weight.view(
+                    batch * self.out_channel, in_channel, self.kernel_size, self.kernel_size)  ##[1,512,1024,1,1]
 
-            style = self.modulation(style).view(batch, 1, in_channel, 1, 1)  ##[1,1,1024,1,1,]
-            ###modulation(style):35x512=>35x1024
-            weight = self.scale * self.weight * style
-            ##[1,512,1024,1,1]
-            if self.demodulate:
-                demod = torch.rsqrt(weight.pow(2).sum([2, 3, 4]) + 1e-8)
-                weight = weight * demod.view(batch, self.out_channel, 1, 1, 1)
-            ##[1,512,1024,1,1]
-            weight = weight.view(
-                batch * self.out_channel, in_channel, self.kernel_size, self.kernel_size)  ##[1,512,1024,1,1]
-
-            input = input.view(1, batch * in_channel, height, width)
-            out = F.conv2d(input, weight, padding=self.padding, groups=batch)
-            _, _, height, width = out.shape
-            out = out.view(batch, self.out_channel, height, width)
-            if self.clade:
+                input = input.view(1, batch * in_channel, height, width)
+                out = F.conv2d(input, weight, padding=self.padding, groups=batch)
+                _, _, height, width = out.shape
+                out = out.view(batch, self.out_channel, height, width)
+                ##apply CLADE layer
                 clade_weight_init = self.clade_weight_modulation(class_style)
-                #
                 clade_bias_init = self.clade_bias_modulation(class_style)
                 out = self.param_free_norm(out)
-                class_weight = F.embedding(label_class_dict, clade_weight_init).permute(0, 3, 1, 2)  # [n, c, h, w]
-                ###
-                class_bias = F.embedding(label_class_dict, clade_bias_init).permute(0, 3, 1, 2)  # [n, c, h, w]
+                class_weight = F.embedding(label_class_dict, clade_weight_init).permute(0, 3, 1, 2)
+                #before permute:[n, h, w, c] after permute [n, c, h, w]
+                class_bias = F.embedding(label_class_dict, clade_bias_init).permute(0, 3, 1, 2)
+                # before permute:[n, h, w, c] after permute [n, c, h, w]
                 out = out * class_weight + class_bias
+
+
+            ##class_label_dict = [N, H, W]
+            if self.approach == 1:
+                print('approach 1 activated')
+                weight = self.weight.view(
+                    batch * self.out_channel, in_channel, self.kernel_size, self.kernel_size)  ##[1,512,1024,1,1]
+
+                input = input.view(1, batch * in_channel, height, width)
+                out = F.conv2d(input, weight, padding=self.padding, groups=batch)
+                _, _, height, width = out.shape
+                out = out.view(batch, self.out_channel, height, width)
+
+                out = self.param_free_norm(out)
+
+                style = style.view(batch, 1, 512).expand(batch, 35, 512)
+                class_style = class_style.view(1, 35, 512).expand(batch, 35, 512)
+                style_concatenation = torch.cat((style, class_style), dim=2).view(batch*35, 1024)
+                clade_weight_init = self.clade_weight_modulation(style_concatenation).view(batch, 35, self.out_channel)
+                clade_bias_init = self.clade_bias_modulation(style_concatenation).view(batch, 35, self.out_channel)
+                class_weight = torch.einsum('nic,nihw->nchw', clade_weight_init, label)
+                class_bias = torch.einsum('nic,nihw->nchw', clade_bias_init, label)
+                out = out * class_weight + class_bias
+
+            if self.approach == 2:
+                ##Matrix computation
+                print('apply approach 2 : Matrix Computation')
+                style = style.view(batch, 1, 512)
+                class_style = class_style.view(1, 35, 512)
+                style_addition = style + class_style ##[N, 35, 512]
+                style_addition = style_addition.view(batch*35, 512)
+                style_weight_init = self.modulation(style_addition).view(batch, 35, self.in_channel)
+                pixel_class_style = torch.einsum('nci,nchw->nihw',style_weight_init,label)
+                weight = self.weight.view(self.out_channel, self.in_channel)
+                weight_per_pixel = self.scale * (torch.einsum('oi,nihw->noihw',weight , pixel_class_style))
+                if self.demodulate:
+                    demod = torch.rsqrt(torch.sum(weight_per_pixel.pow(2), dim=2, keepdim=True) + 1e-8)
+                    weight_per_pixel = weight_per_pixel * demod
+                out = torch.einsum('nihw,noihw->nohw', input, weight_per_pixel)
+
 
         return out
 
@@ -457,10 +505,10 @@ class StyledConv(nn.Module):
         demodulate=True,
         activation=None,
         downsample=False,
-        clade=None,
+        approach=-1,
     ):
         super().__init__()
-        self.clade = clade
+        self.approach = approach
         self.conv = ModulatedConv2d(
             in_channel,
             out_channel,
@@ -470,7 +518,7 @@ class StyledConv(nn.Module):
             blur_kernel=blur_kernel,
             demodulate=demodulate,
             downsample=downsample,
-            clade=self.clade,
+            approach=self.approach,
         )
 
         self.activation = activation
@@ -495,14 +543,14 @@ class StyledConv(nn.Module):
 
 
 class ToRGB(nn.Module):
-    def __init__(self, in_channel, style_dim, upsample=True, blur_kernel=[1, 3, 3, 1],clade=None,):#jhl
+    def __init__(self, in_channel, style_dim, upsample=True, blur_kernel=[1, 3, 3, 1],approach=-1):#jhl
         super().__init__()
-        self.clade = clade
+        self.approach = approach
         self.upsample = upsample
         if upsample:
             self.upsample = Upsample(blur_kernel)
 
-        self.conv = ModulatedConv2d(in_channel, 3, 1, style_dim, demodulate=False,clade=self.clade,)#jhl
+        self.conv = ModulatedConv2d(in_channel, 3, 1, style_dim, demodulate=False,approach=self.approach,)#jhl
         self.bias = nn.Parameter(torch.zeros(1, 3, 1, 1))
 
     def forward(self, input, style, skip=None,label_class_dict=None,label=None,class_style=None):

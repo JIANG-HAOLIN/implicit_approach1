@@ -138,12 +138,19 @@ class ImplicitGenerator(nn.Module):
 
 
 
-    def __init__(self, opt=[],size=256, hidden_size=512, n_mlp=8, style_dim=512, lr_mlp=0.01,
+    def __init__(self, opt=None,size=256, hidden_size=512, n_mlp=8, style_dim=512, lr_mlp=0.01,
                  activation=None, channel_multiplier=2,z=None, **kwargs):
         super(ImplicitGenerator, self).__init__()
 
         self.opt = opt
-        self.clade = opt.apply_CLADE#jhl
+        if opt.apply_MOD_CLADE:
+            self.approach = 0
+        elif opt.only_CLADE:
+            self.approach = 1
+        elif opt.Matrix_Computation:
+            self.approach = 2
+        else:
+            self.approach = -1
 
         self.tanh = nn.Tanh()
 
@@ -173,7 +180,7 @@ class ImplicitGenerator(nn.Module):
                                           style_dim,
                                           demodulate=demodulate,
                                           activation=activation,
-                                          clade=self.clade,#jhl
+                                          approach=self.approach,#jhl
                                           )
         ###kernel_size = 1===>first modFC layer!!only one layer!!input=embbed coords!!
 
@@ -191,10 +198,10 @@ class ImplicitGenerator(nn.Module):
         for i in range(0, self.log_size - 1):## for each layer in intermediate 7 Layers:
             out_channels = self.channels[i]
             self.linears.append(CIPblocks.StyledConv(in_channels, out_channels, 1, style_dim,
-                                           demodulate=demodulate, activation=activation,clade=self.clade,))#jhl
+                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
             self.linears.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
-                                           demodulate=demodulate, activation=activation,clade=self.clade,))#jhl
-            self.to_rgbs.append(CIPblocks.ToRGB(out_channels, style_dim, upsample=False,clade=self.clade,))#jhl
+                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+            self.to_rgbs.append(CIPblocks.ToRGB(out_channels, style_dim, upsample=False,approach=self.approach,))#jhl
                                                                                         ###upsample turned off manually
 
             in_channels = out_channels
