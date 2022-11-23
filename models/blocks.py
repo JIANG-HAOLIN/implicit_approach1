@@ -426,8 +426,10 @@ class ModulatedConv2d(nn.Module):
 
 
             ##class_label_dict = [N, H, W]
+
+            ## use only CLADE layer, no mod or demod
             if self.approach == 1:
-                print('approach 1 activated')
+                # print('approach 1 activated')
                 weight = self.weight.view(
                     batch * self.out_channel, in_channel, self.kernel_size, self.kernel_size)  ##[1,512,1024,1,1]
 
@@ -447,9 +449,10 @@ class ModulatedConv2d(nn.Module):
                 class_bias = torch.einsum('nic,nihw->nchw', clade_bias_init, label)
                 out = out * class_weight + class_bias
 
+
+            ## brutal Matrix Computation approach
             if self.approach == 2:
-                ##Matrix computation
-                print('apply approach 2 : Matrix Computation')
+                # print('apply approach 2 : Matrix Computation')
                 style = style.view(batch, 1, 512)
                 class_style = class_style.view(1, 35, 512)
                 style_addition = style + class_style ##[N, 35, 512]
