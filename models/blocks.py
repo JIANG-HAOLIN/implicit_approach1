@@ -430,13 +430,12 @@ class ModulatedConv2d(nn.Module):
             ## use only CLADE layer, no mod or demod
             if self.approach == 1:
                 # print('approach 1 activated')
-                weight = self.weight.view(
-                    batch * self.out_channel, in_channel, self.kernel_size, self.kernel_size)  ##[1,512,1024,1,1]
+                weight = self.weight.view(self.out_channel,in_channel,self.kernel_size,self.kernel_size) ##[512,1024,1,1]
 
-                input = input.view(1, batch * in_channel, height, width)
-                out = F.conv2d(input, weight, padding=self.padding, groups=batch)
-                _, _, height, width = out.shape
-                out = out.view(batch, self.out_channel, height, width)
+                # input = input.view(1, batch * in_channel, height, width)
+                out = F.conv2d(input, weight, padding=self.padding)
+                # _, _, height, width = out.shape
+                # out = out.view(batch, self.out_channel, height, width)
 
                 out = self.param_free_norm(out)
 
@@ -488,11 +487,12 @@ class ConstantInput(nn.Module):
     def __init__(self, channel, size=4):
         super().__init__()
 
-        self.input = nn.Parameter(torch.randn(1, channel, size, 512))
+        self.input = nn.Parameter(torch.randn(1, channel, 256, 512))
 
     def forward(self, input):
         batch = input.shape[0]
         out = self.input.repeat(batch, 1, 1, 1)
+        ##output = [batch,channel,size.512]
         return out
 
 

@@ -23,4 +23,4 @@ conda activate /usrhomes/s1434/anaconda3/envs/myenv
 python train_supervised.py --name oasis_cityscapes --dataset_mode cityscapes --gpu_ids 0 \
 --dataroot /data/public/cityscapes --batch_size 1  \
 --model_supervision 2 --netG 1 --channels_G 64 --num_epochs 500 \
---checkpoints_dir ./checkpoints_2_tanh_%j.%N --Matrix_Computation
+--checkpoints_dir ./checkpoints_2_tanh --Matrix_Computation

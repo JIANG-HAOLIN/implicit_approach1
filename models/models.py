@@ -7,8 +7,11 @@ import torch
 from torch.nn import init
 import models.losses as losses
 from models.CannyFilter import CannyFilter
+# from torchstat import stat
 
 from torch import nn, autograd, optim
+
+device_models = 'cuda'
 
 
 def d_r1_loss(real_pred, real_img):
@@ -27,10 +30,14 @@ class OASIS_model(nn.Module):
         if opt.netG == 9:
             self.netG = generators.ResidualWaveletGenerator_1(opt)
         elif opt.netG == 1:
-            self.netG = generators.ImplicitGenerator(opt=opt,size=256, hidden_size=512, style_dim=512, n_mlp=8,
-                                  activation=None, channel_multiplier=2).to("cuda")
+            self.netG = generators.ImplicitGenerator(opt=opt,size=512, hidden_size=512, style_dim=512, n_mlp=8,
+                                  activation=None, channel_multiplier=2)
+        elif opt.netG == 2:
+            self.netG = generators.ImplicitGenerator_multi_scale(opt=opt,size=512, hidden_size=512, style_dim=512, n_mlp=8,
+                                  activation=None, channel_multiplier=2)
         else:
             self.netG = generators.OASIS_Generator(opt)
+            # stat(self.netG)
         if opt.phase == "train":
             self.netD = discriminators.OASIS_Discriminator(opt)
         self.print_parameter_count()
@@ -916,7 +923,7 @@ def generate_labelmix(label, fake_image, real_image):
     target_map = torch.argmax(label, dim=1, keepdim=True)
     all_classes = torch.unique(target_map)
     for c in all_classes:
-        target_map[target_map == c] = torch.randint(0, 2, (1,)).to("cuda")
+        target_map[target_map == c] = torch.randint(0, 2, (1,)).to(device_models)
     target_map = target_map.float()
     mixed_image = target_map * real_image + (1 - target_map) * fake_image
     return mixed_image, target_map

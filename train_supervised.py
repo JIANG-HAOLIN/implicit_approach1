@@ -31,6 +31,18 @@ import numpy as np
 
 #--- read options ---#
 opt = config.read_arguments(train=True)
+
+
+
+# opt.Matrix_Computation = True
+# opt.apply_MOD_CLADE = True
+# opt.dataroot = '/Users/hlj/Documents/NoSync.nosync/FA/cityscapes'
+# opt.gpu_ids = '-1'
+# opt.netG = 1
+device = "cuda"
+
+
+
 print("nb of gpus: ", torch.cuda.device_count())
 #--- create utils ---#
 timer = utils.timer(opt)
@@ -52,6 +64,7 @@ miou_computer = miou_pytorch(opt,dataloader_val)
 
 model = models.OASIS_model(opt)
 model = models.put_on_multi_gpus(model, opt)
+
 # model = Generator(size=256, hidden_size=512, style_dim=512, n_mlp=8,
 #                       activation=None, channel_multiplier=2,
 #                       ).to(device)
@@ -65,6 +78,17 @@ model = models.put_on_multi_gpus(model, opt)
 optimizerG = torch.optim.Adam(model.module.netG.parameters(), lr=opt.lr_g, betas=(opt.beta1, opt.beta2))##????????
 # optimizerG = torch.optim.Adam(model.netG.parameters(), lr=opt.lr_g, betas=(opt.beta1, opt.beta2))
 optimizerD = torch.optim.Adam(model.module.netD.parameters(), lr=opt.lr_d, betas=(opt.beta1, opt.beta2))##????????
+
+
+
+# checkpoint = torch.load('./checkpoints_MOD+CLADE/oasis_cityscapes/')
+# model.load_state_dict(checkpoint['model_state_dict'])
+# optimizerG.load_state_dict(checkpoint['optimizer_state_dict'])
+# epoch = checkpoint['epoch']
+# loss = checkpoint['loss']
+# model.eval()
+# # - or -
+# model.train()
 
 
 def loopy_iter(dataset):
@@ -99,7 +123,7 @@ start_epoch, start_iter = utils.get_start_iters(opt.loaded_latest_iter, len(data
 if opt.model_supervision != 0 :
     supervised_iter = loopy_iter(dataloader_supervised)
 
-device="cuda"
+
 batch_size = opt.batch_size#@jhl
 # label_class_extractor= torch.arange(1,36,1).view(1,35,1,1).cuda(0)
 
@@ -122,10 +146,10 @@ for epoch in range(start_epoch, opt.num_epochs):
         # --- generator update ---#
 
         noise = mixing_noise(batch_size, 512, 0, device)
-        coords = tt.convert_to_coord_format(batch_size, 256, 512, integer_values=False).cuda(0)
+        coords = tt.convert_to_coord_format(batch_size, 256, 512, integer_values=False)
         # input_img = torch.randn([batch_size, 3, 256, 512])
         input_img = image
-        real_stack = torch.cat([input_img, coords], 1).to(device)
+        real_stack = torch.cat([input_img, coords], 1)
         real_img, converted = real_stack[:, :3], real_stack[:, 3:]
 
 
