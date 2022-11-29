@@ -98,12 +98,12 @@ def loopy_iter(dataset):
 
 
 
-height=256
-width =512
-in_channel = 1024
-out_channel = 512
-batch = 1
-scale = 1
+# height=256
+# width =512
+# in_channel = 1024
+# out_channel = 512
+# batch = 1
+# scale = 1
 
 # input=torch.randn(batch,in_channel,height,width).cuda(0)
 # weight= torch.randn(batch,out_channel,in_channel,height,width).cuda(0)
