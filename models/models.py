@@ -35,6 +35,12 @@ class OASIS_model(nn.Module):
         elif opt.netG == 2:
             self.netG = generators.ImplicitGenerator_multi_scale(opt=opt,size=512, hidden_size=512, style_dim=512, n_mlp=8,
                                   activation=None, channel_multiplier=2)
+        elif opt.netG == 3:
+            self.netG = generators.ImplicitGenerator_direct_emb(opt=opt, size=512, hidden_size=512, style_dim=512,n_mlp=8,
+                                  activation=None, channel_multiplier=2)
+        elif opt.netG == 4:
+            self.netG = generators.ImplicitGenerator_multiscale_direct_emb(opt=opt, size=512, hidden_size=512, style_dim=512,n_mlp=8,
+                                  activation=None, channel_multiplier=2)
         else:
             self.netG = generators.OASIS_Generator(opt)
             # stat(self.netG)
@@ -44,7 +50,8 @@ class OASIS_model(nn.Module):
         self.init_networks()
         #--- EMA of generator weights ---
         with torch.no_grad():
-            self.netEMA = copy.deepcopy(self.netG) if not opt.no_EMA else None
+           self.netEMA = copy.deepcopy(self.netG) if not opt.no_EMA else None
+            # pass
         #--- load previous checkpoints if needed ---
         self.load_checkpoints()
         #--- perceptual loss ---#

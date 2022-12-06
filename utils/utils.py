@@ -313,7 +313,7 @@ class image_saver():
                 fake,_ = model.module.netEMA(label=label,##[1,35,256,512]
                                         label_class_dict=label_class_dict,
                                         coords=converted,##[1,2,256,512]
-                                        latent=latent,##一维list[Tensor(1,512)]
+                                        latent=latent,##list[Tensor(1,512)]
                                         return_latents=False,
                                         truncation=1,
                                         truncation_latent=None,

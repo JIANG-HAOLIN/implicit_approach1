@@ -484,10 +484,34 @@ class NoiseInjection(nn.Module):
 
 
 class ConstantInput(nn.Module):
-    def __init__(self, channel, size=4):
+    def  __init__(self, channel, size=4):
         super().__init__()
 
         self.input = nn.Parameter(torch.randn(1, channel, 256, 512))
+
+    def forward(self, input):
+        batch = input.shape[0]
+        out = self.input.repeat(batch, 1, 1, 1)
+        ##output = [batch,channel,size.512]
+        return out
+
+class ConstantInput_multi_scale(nn.Module):
+    def __init__(self, channel, size=4):
+        super().__init__()
+
+        self.input = nn.Parameter(torch.randn(1, channel, 32, 64))
+
+    def forward(self, input):
+        batch = input.shape[0]
+        out = self.input.repeat(batch, 1, 1, 1)
+        ##output = [batch,channel,size.512]
+        return out
+
+class ConstantInput_multiscale_direct_emb(nn.Module):
+    def __init__(self, channel, size=4):
+        super().__init__()
+
+        self.input = nn.Parameter(torch.randn(1, channel, 128, 256))
 
     def forward(self, input):
         batch = input.shape[0]
@@ -716,12 +740,15 @@ class ConLinear(nn.Module):
     def __init__(self, ch_in, ch_out, is_first=False, bias=True):
         super(ConLinear, self).__init__()
         self.conv = nn.Conv2d(ch_in, ch_out, kernel_size=1, padding=0, bias=bias)
+        # print('initialsation:',self.conv.weight.device)
+
         if is_first:
             nn.init.uniform_(self.conv.weight, -np.sqrt(9 / ch_in), np.sqrt(9 / ch_in))
         else:
             nn.init.uniform_(self.conv.weight, -np.sqrt(3 / ch_in), np.sqrt(3 / ch_in))
 
     def forward(self, x):
+        # print('forwarding',self.conv.weight.device,x.device)
         return self.conv(x)
 
 

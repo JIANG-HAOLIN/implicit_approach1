@@ -272,6 +272,7 @@ class ImplicitGenerator(nn.Module):
         if self.training and w == h == self.size:
             emb = self.emb(x)
         else:
+            #emb1 = self.emb(x)
             emb = F.grid_sample(
                 #Given an input and a flow-field grid,
                 #computes the output using input values and pixel locations from grid.
@@ -316,15 +317,15 @@ class ImplicitGenerator(nn.Module):
 
 
 
-
-class ImplicitGenerator_multi_scale(nn.Module):
+class ImplicitGenerator_direct_emb(nn.Module):
 
 
 
 
     def __init__(self, opt=None,size=256, hidden_size=512, n_mlp=8, style_dim=512, lr_mlp=0.01,
-                 activation=None, channel_multiplier=2,z=None, **kwargs):
-        super(ImplicitGenerator_multi_scale, self).__init__()
+                 activation=None,
+                 channel_multiplier=2,z=None, **kwargs):
+        super(ImplicitGenerator_direct_emb, self).__init__()
 
         self.opt = opt
         if opt.apply_MOD_CLADE:
@@ -341,75 +342,55 @@ class ImplicitGenerator_multi_scale(nn.Module):
         self.size = size
         demodulate = True
         self.demodulate = demodulate
-        self.lff1 = CIPblocks.LFF(hidden_size)
-        self.lff2 = CIPblocks.LFF(int(hidden_size/2))
-        self.lff3 = CIPblocks.LFF(int(hidden_size/4))
-        self.emb1 = CIPblocks.ConstantInput(hidden_size, size=size)
-        # self.emb2 = CIPblocks.ConstantInput(hidden_size/2, size=size)
-        # self.emb3 = CIPblocks.ConstantInput(hidden_size/4, size=size)
-
+        self.lff = CIPblocks.LFF(hidden_size)
+        self.emb = CIPblocks.ConstantInput(hidden_size, size=size)
 
         self.channels = {
-            0: 1024,
-            1: 512,
-            2: 256,
-            3: 128,
-            4: 64,
+            0: 512,
+            1: 512,##512
+            2: 512,##512
+            3: 512,##512
+            4: 256 * channel_multiplier,
+            5: 128 * channel_multiplier,
+            6: 64 * channel_multiplier,
+            7: 32 * channel_multiplier,
+            8: 16 * channel_multiplier,
         }
 
-
+        multiplier = 2
+        in_channels = int(self.channels[0])
+        self.conv1 = CIPblocks.StyledConv(int(multiplier*hidden_size),##the real in_channel 1024
+                                          in_channels,##actually is out_channel
+                                          1,
+                                          style_dim,
+                                          demodulate=demodulate,
+                                          activation=activation,
+                                          approach=self.approach,#jhl
+                                          )
         ###kernel_size = 1===>first modFC layer!!only one layer!!input=embbed coords!!
 
         self.linears = nn.ModuleList()
         ##2xModFC for 2-8 Layers
         self.to_rgbs = nn.ModuleList()
+        ##tRGB for 2-8 Layers
+        self.log_size = int(CIPblocks.math.log(size, 2))
+        ## 8 Layers
 
-
-
-
-        self.coords1 = tt.convert_to_coord_format(opt.batch_size, 64, 128, integer_values=False)
-        self.fourier_feature1 = self.lff1(self.coords1)
-        self.emb1 = CIPblocks.ConstantInput(hidden_size, size=size)
-
-
-        self.linears.append(CIPblocks.StyledConv(1024, 512, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))  # jhl
-        self.linears.append(CIPblocks.StyledConv(512, 512, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-        self.linears.append(CIPblocks.StyledConv(512, 512, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-        self.linears.append(CIPblocks.StyledConv(512, 256 , 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))  # jhl
-
-        self.linears.append(torch.nn.Upsample(size=(128, 256), scale_factor=2, mode='nearest',
-                                              align_corners=None, recompute_scale_factor=None))
-        self.coords2 = tt.convert_to_coord_format(opt.batch_size, 128, 256, integer_values=False)
-        self.fourier_feature2 = self.lff2(self.coords2)
-
-        self.linears.append(CIPblocks.StyledConv(512, 256, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-        self.linears.append(CIPblocks.StyledConv(256, 256, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-        self.linears.append(CIPblocks.StyledConv(256, 256, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
-        self.linears.append(CIPblocks.StyledConv(256, 128, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach,))
-
-        self.linears.append(torch.nn.Upsample(size=(256, 512), scale_factor=2, mode='nearest',
-                          align_corners=None,recompute_scale_factor=None))
-        self.coords3 = tt.convert_to_coord_format(opt.batch_size, 256, 512, integer_values=False)
-        self.fourier_feature3 = self.lff3(self.coords3)
-
-        self.linears.append(CIPblocks.StyledConv(256, 128, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-        self.linears.append(CIPblocks.StyledConv(128, 128, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-        self.linears.append(CIPblocks.StyledConv(128, 128, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-        self.linears.append(CIPblocks.StyledConv(128, 128, 1, style_dim,
-                            demodulate=demodulate, activation=activation,approach=self.approach, ))
-
-        self.to_rgbs.append(CIPblocks.ToRGB(128, style_dim, upsample=False, approach=self.approach, ))
+        self.n_intermediate = self.log_size - 1
+        ## intermediate layer(7 layers except first layer)
+        self.to_rgb_stride = 2
+        ##how many ModFC between two tRGB==>in this case, 2 ModFC layers
+        for i in range(0, self.log_size - 1):## for each layer in intermediate 7 Layers:
+            out_channels = self.channels[i]
+            self.linears.append(CIPblocks.StyledConv(in_channels, out_channels, 1, style_dim,
+                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+            self.linears.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
+                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+            self.to_rgbs.append(CIPblocks.ToRGB(out_channels, style_dim, upsample=False,approach=self.approach,))#jhl
+                                                                                        ###upsample turned off manually
+            # print(out_channels)
+            in_channels = out_channels
+            ##2xModFC+tRGB for 2-8 Layers
 
         self.style_dim = style_dim
         ##dimension of style vector
@@ -464,6 +445,428 @@ class ImplicitGenerator_multi_scale(nn.Module):
         # latent = self.alpha*latent + (1-self.alpha)*self.styleMatrix
         ##combined style vector [35,512]
 
+
+        x = self.lff(coords)
+        ##Fourier Features:simple linear transformation with sin activation
+            ##[N,512,256,512]
+        # print(x)
+
+        batch_size, _, w, h = coords.shape
+
+        emb = self.emb(x)
+
+        ##generate coordinate embedding for 256x512
+        ##[1,512,256,512]
+
+        x = torch.cat([x, emb], 1)
+        ##concatenation of Fourier Features and Coordinates Embeddings on channel dimension!!!
+        ##[1,1024,256,512]
+
+        rgb = 0
+
+        x = self.conv1(x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+        ##first ModFC layer
+        for i in range(self.n_intermediate):##2-8 ModFC layers
+            # print(i)
+            for j in range(self.to_rgb_stride):##2xModFC
+                x = self.linears[i*self.to_rgb_stride + j](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+
+            rgb = self.to_rgbs[i](x, latent, rgb,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+                                        ####skip=rgb ==> rgb image accumulation!!
+
+        if return_latents:
+            return rgb, latent
+        else:
+
+            # print("rgb size:",rgb.size())
+            # return self.tanh(rgb), None
+            return rgb, None
+
+
+
+
+
+
+
+
+
+class ImplicitGenerator_multiscale_direct_emb(nn.Module):
+
+
+
+
+    def __init__(self, opt=None,size=256, hidden_size=512, n_mlp=8, style_dim=512, lr_mlp=0.01,
+                 activation=None,
+                 channel_multiplier=2,z=None, **kwargs):
+        super(ImplicitGenerator_multiscale_direct_emb, self).__init__()
+
+        self.opt = opt
+        if opt.apply_MOD_CLADE:
+            self.approach = 0
+        elif opt.only_CLADE:
+            self.approach = 1
+        elif opt.Matrix_Computation:
+            self.approach = 2
+        else:
+            self.approach = -1
+
+        self.tanh = nn.Tanh()
+
+        self.size = size
+        demodulate = True
+        self.demodulate = demodulate
+        self.lff = CIPblocks.LFF(hidden_size)
+        self.lff1 = CIPblocks.LFF(int(hidden_size/2))
+        self.emb = CIPblocks.ConstantInput_multiscale_direct_emb(hidden_size, size=size)
+
+        self.channels = {
+            0: 512,
+            1: 512,##512
+            2: 512,##512
+            3: 512,##512
+            4: 256 * channel_multiplier,
+            5: 128 * channel_multiplier,
+            6: 64 * channel_multiplier,
+            7: 32 * channel_multiplier,
+            8: 16 * channel_multiplier,
+        }
+
+        multiplier = 2
+
+        self.coords0 = tt.convert_to_coord_format(opt.batch_size, 128, 256, integer_values=False)
+
+        in_channels = int(self.channels[0])
+        self.conv1 = CIPblocks.StyledConv(int(multiplier*hidden_size),##the real in_channel 1024
+                                          in_channels,##actually is out_channel
+                                          1,
+                                          style_dim,
+                                          demodulate=demodulate,
+                                          activation=activation,
+                                          approach=self.approach,#jhl
+                                          )
+        self.conv2 = CIPblocks.StyledConv(512,  ##the real in_channel 1024
+                                          256,  ##actually is out_channel
+                                          1,
+                                          style_dim,
+                                          demodulate=demodulate,
+                                          activation=activation,
+                                          approach=self.approach,  # jhl
+                                          )
+        ###kernel_size = 1===>first modFC layer!!only one layer!!input=embbed coords!!
+
+        self.linears = nn.ModuleList()
+        ##2xModFC for 2-8 Layers
+        self.to_rgbs = nn.ModuleList()
+        ##tRGB for 2-8 Layers
+
+        self.log_size = int(CIPblocks.math.log(size, 2))
+        ## 8 Layers
+
+        self.n_intermediate = self.log_size - 1
+        ## intermediate layer(7 layers except first layer)
+        self.to_rgb_stride = 2
+        ##how many ModFC between two tRGB==>in this case, 2 ModFC layers
+        for i in range(0, self.log_size - 1):## for each layer in intermediate 7 Layers:
+
+            out_channels = self.channels[i]
+            self.linears.append(CIPblocks.StyledConv(in_channels, out_channels, 1, style_dim,
+                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+            self.linears.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
+                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+
+            self.to_rgbs.append(CIPblocks.ToRGB(out_channels, style_dim, upsample=False,approach=self.approach,))#jhl
+                                                                                        ###upsample turned off manually
+            # print(out_channels)
+            in_channels = out_channels
+            ##2xModFC+tRGB for 2-8 Layers
+
+
+
+        self.style_dim = style_dim
+        ##dimension of style vector
+
+        layers = [CIPblocks.PixelNorm()]
+        ##layers for latent normalization
+
+        for i in range(n_mlp):##mapping network for style w(in total 8 layers)
+            layers.append(
+                CIPblocks.EqualLinear(
+                    style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
+                )
+            )
+
+        self.style = nn.Sequential(*layers)
+        ##mapping network that generate style w!!
+
+
+
+
+        self.styleMatrix = nn.Parameter(torch.randn(35,512))
+        # self.styleMatrix.data.fill_(0.25)
+        # self.alpha = nn.Parameter(torch.rand(1,512))
+        # self.alpha.data.fill_(0.5)
+
+
+
+
+    def forward(self,
+                label,##[1,35,256,512]
+                label_class_dict,
+                coords,##[1,2,256,512]
+                latent,##1D list[Tensor(1,512)]
+                return_latents=False,
+                truncation=1,
+                truncation_latent=None,
+                input_is_latent=False,
+                edges=None,
+                ):
+        # print("input latent code:",latent)
+        latent = latent[0]##[1,512]
+        ##input noirse z
+        # print("received latent[0] :",latent.shape,latent)
+        if truncation < 1:
+            latent = truncation_latent + truncation * (latent - truncation_latent)
+
+        if not input_is_latent:
+            latent = self.style(latent)
+        ##style w [1,512]
+
+
+        # latent = self.alpha*latent + (1-self.alpha)*self.styleMatrix
+        ##combined style vector [35,512]
+
+
+        x = self.lff(self.coords0)
+        ##Fourier Features:simple linear transformation with sin activation
+            ##[N,512,256,512]
+        # print(x)
+
+        batch_size, _, w, h = coords.shape
+
+        emb = self.emb(x)
+
+        ##generate coordinate embedding for 256x512
+        ##[1,512,256,512]
+
+        x = torch.cat([x, emb], 1)
+        ##concatenation of Fourier Features and Coordinates Embeddings on channel dimension!!!
+        ##[1,1024,256,512]
+
+        rgb = 0
+
+        label_256_512 = label
+        label_class_dict_256_512 = label_class_dict
+        label_128_256 = F.interpolate(label,  ##!!  interpolate can also downscale!!!
+                                      size=(128,256),  ##take the H and W
+                                      mode='nearest')
+
+
+        label_class_dict_128_256 = torch.argmax(label_128_256, 1).long()
+
+        label = label_128_256
+        label_class_dict = label_class_dict_128_256
+
+        x = self.conv1(x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+        ##first ModFC layer
+
+
+
+        for i in range(self.n_intermediate):##2-8 ModFC layers
+
+            if x.shape[1] == 256:
+                label = label_256_512
+                label_class_dict = label_class_dict_256_512
+                x = F.interpolate(x,scale_factor=2,mode = 'bilinear')
+                x = torch.cat([x,self.lff1(coords)],1)
+                x = self.conv2(x, latent, label_class_dict=label_class_dict, label=label,
+                               class_style=self.styleMatrix, )
+                rgb = F.interpolate(rgb,scale_factor=2,mode = 'bilinear')
+
+
+            for j in range(self.to_rgb_stride):##2xModFC
+                x = self.linears[i*self.to_rgb_stride + j](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+
+
+
+            rgb = self.to_rgbs[i](x, latent, rgb,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+                                        ####skip=rgb ==> rgb image accumulation!!
+
+        if return_latents:
+            return rgb, latent
+        else:
+
+            # print("rgb size:",rgb.size())
+            # return self.tanh(rgb), None
+            return rgb, None
+
+
+
+
+
+
+
+
+
+class ImplicitGenerator_multi_scale(nn.Module):
+
+
+
+
+    def __init__(self, opt=None,size=256, hidden_size=512, n_mlp=8, style_dim=512, lr_mlp=0.01,
+                 activation=None, channel_multiplier=2,z=None, **kwargs):
+        super(ImplicitGenerator_multi_scale, self).__init__()
+
+        self.opt = opt
+
+        self.approach = 2
+
+        self.tanh = nn.Tanh()
+
+        self.size = size
+        demodulate = True
+        self.demodulate = demodulate
+        self.lff0 = CIPblocks.LFF(hidden_size)
+        self.lff1 = CIPblocks.LFF(int(hidden_size/2))
+        self.lff2 = CIPblocks.LFF(int(hidden_size/4))
+        self.lff3 = CIPblocks.LFF(int(hidden_size / 8))
+        self.emb1 = CIPblocks.ConstantInput_multi_scale(hidden_size, size=size)
+        # self.emb2 = CIPblocks.ConstantInput(hidden_size/2, size=size)
+        # self.emb3 = CIPblocks.ConstantInput(hidden_size/4, size=size)
+
+
+        self.channels = {
+            0: 1024,
+            1: 512,
+            2: 256,
+            3: 128,
+            4: 64,
+        }
+
+
+        ###kernel_size = 1===>first modFC layer!!only one layer!!input=embbed coords!!
+
+        self.linears = nn.ModuleList()
+        ##2xModFC for 2-8 Layers
+        self.to_rgbs = nn.ModuleList()
+
+        self.coords0 = tt.convert_to_coord_format(opt.batch_size, 32, 64, integer_values=False)
+
+        self.linears.append(CIPblocks.StyledConv(1024, 512, 1, style_dim,
+                                                 demodulate=demodulate, activation=activation,
+                                                 approach=self.approach, ))  # jhl
+        self.linears.append(CIPblocks.StyledConv(512, 512, 1, style_dim,
+                                                 demodulate=demodulate, activation=activation,
+                                                 approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(512, 512, 1, style_dim,
+                                                 demodulate=demodulate, activation=activation,
+                                                 approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(512, 256, 1, style_dim,
+                                                 demodulate=demodulate, activation=activation,
+                                                 approach=self.approach, ))  # jhl
+
+        self.linears.append(torch.nn.Upsample(scale_factor=2, mode='nearest',
+                                              align_corners=None, recompute_scale_factor=None))
+
+
+
+
+        self.coords1 = tt.convert_to_coord_format(opt.batch_size, 64, 128, integer_values=False)
+
+
+
+        self.linears.append(CIPblocks.StyledConv(512, 256, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))  # jhl
+        self.linears.append(CIPblocks.StyledConv(256, 256, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(256, 256, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(256, 256 , 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))  # jhl
+
+        self.linears.append(torch.nn.Upsample(scale_factor=2, mode='nearest',
+                                              align_corners=None, recompute_scale_factor=None))
+        self.coords2 = tt.convert_to_coord_format(opt.batch_size, 128, 256, integer_values=False)
+
+        self.linears.append(CIPblocks.StyledConv(256, 128, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(128, 128, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(128, 128, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+        self.linears.append(CIPblocks.StyledConv(128, 64, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach,))
+
+        self.linears.append(torch.nn.Upsample(scale_factor=2, mode='nearest',
+                          align_corners=None,recompute_scale_factor=None))
+        self.coords3 = tt.convert_to_coord_format(opt.batch_size, 256, 512, integer_values=False)
+
+
+        self.linears.append(CIPblocks.StyledConv(128, 64, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(64, 64, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(64, 64, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+        self.linears.append(CIPblocks.StyledConv(64, 64, 1, style_dim,
+                            demodulate=demodulate, activation=activation,approach=self.approach, ))
+
+        self.to_rgbs.append(CIPblocks.ToRGB(64, style_dim, upsample=False, approach=self.approach, ))
+
+        self.style_dim = style_dim
+        ##dimension of style vector
+
+        layers = [CIPblocks.PixelNorm()]
+        ##layers for latent normalization
+
+        for i in range(n_mlp):##mapping network for style w(in total 8 layers)
+            layers.append(
+                CIPblocks.EqualLinear(
+                    style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
+                )
+            )
+
+        self.style = nn.Sequential(*layers)
+        ##mapping network that generate style w!!
+
+
+
+
+        self.styleMatrix = nn.Parameter(torch.randn(35,512))
+        # self.styleMatrix.data.fill_(0.25)
+        # self.alpha = nn.Parameter(torch.rand(1,512))
+        # self.alpha.data.fill_(0.5)
+
+
+
+
+    def forward(self,
+                label,##[1,35,256,512]
+                label_class_dict,
+                coords,##[1,2,256,512]
+                latent,##1D list[Tensor(1,512)]
+                return_latents=False,
+                truncation=1,
+                truncation_latent=None,
+                input_is_latent=False,
+                edges=None,
+                ):
+        # print("input latent code:",latent)
+        latent = latent[0]##[1,512]
+        ##input noirse z
+        # print("received latent[0] :",latent.shape,latent)
+        if truncation < 1:
+            latent = truncation_latent + truncation * (latent - truncation_latent)
+
+        if not input_is_latent:
+            latent = self.style(latent)
+        ##style w [1,512]
+
+
+
+
+        # latent = self.alpha*latent + (1-self.alpha)*self.styleMatrix
+        ##combined style vector [35,512]
+
         ##Fourier Features:simple linear transformation with sin activation
             ##[N,512,256,512]
         # print(x)
@@ -477,25 +880,62 @@ class ImplicitGenerator_multi_scale(nn.Module):
         ##[1,1024,256,512]
 
         rgb = 0
+        fourier_feature0 = self.lff0(self.coords0)  # [1,512,32,64]
+        fourier_feature1 = self.lff1(self.coords1)#[1,256,64,128]
+        fourier_feature2 = self.lff2(self.coords2)#[1,128,128,256]
+        fourier_feature3 = self.lff3(self.coords3)#[1,64,256,512]
+        x = self.emb1(fourier_feature0)
 
-        x = torch.cat([self.fourier_feature1, self.emb1], 1)
-        x = self.linears[0](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
-        x = self.linears[1](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[2](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[3](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
+        x = torch.cat([fourier_feature0, x ], 1)
+
+        label_32_64 = F.interpolate(label,  ##!!  interpolate can also downscale!!!
+                              size=x.size()[2:],  ##take the H and W
+                              mode='nearest')
+
+        x = self.linears[0](x, latent,label_class_dict=label_class_dict,label=label_32_64,class_style=self.styleMatrix,)
+        x = self.linears[1](x, latent, label_class_dict=label_class_dict, label=label_32_64, class_style=self.styleMatrix, )
+        x = self.linears[2](x, latent, label_class_dict=label_class_dict, label=label_32_64, class_style=self.styleMatrix, )
+        x = self.linears[3](x, latent, label_class_dict=label_class_dict, label=label_32_64, class_style=self.styleMatrix, )
         x = self.linears[4](x)
-        x = torch.cat([self.fourier_feature2, self.x], 1)
-        x = self.linears[5](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[6](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[7](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[8](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
+        x = torch.cat([fourier_feature1, x], 1)
+
+        label_64_128 = F.interpolate(label,  ##!!  interpolate can also downscale!!!
+                              size=x.size()[2:],  ##take the H and W
+                              mode='nearest')
+
+        x = self.linears[5](x, latent, label_class_dict=label_class_dict, label=label_64_128, class_style=self.styleMatrix, )
+        x = self.linears[6](x, latent, label_class_dict=label_class_dict, label=label_64_128, class_style=self.styleMatrix, )
+        x = self.linears[7](x, latent, label_class_dict=label_class_dict, label=label_64_128, class_style=self.styleMatrix, )
+        x = self.linears[8](x, latent, label_class_dict=label_class_dict, label=label_64_128, class_style=self.styleMatrix, )
         x = self.linears[9](x)
-        x = torch.cat([self.fourier_feature3, self.x], 1)
-        x = self.linears[10](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[11](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[12](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        x = self.linears[13](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
-        rgb = self.to_rgbs[0](x, latent, rgb,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+        x = torch.cat([fourier_feature2, x], 1)
+
+        label_128_256 = F.interpolate(label,  ##!!  interpolate can also downscale!!!
+                              size=x.size()[2:],  ##take the H and W
+                              mode='nearest')
+
+        x = self.linears[10](x, latent, label_class_dict=label_class_dict, label=label_128_256, class_style=self.styleMatrix, )
+        x = self.linears[11](x, latent, label_class_dict=label_class_dict, label=label_128_256, class_style=self.styleMatrix, )
+        x = self.linears[12](x, latent, label_class_dict=label_class_dict, label=label_128_256, class_style=self.styleMatrix, )
+        x = self.linears[13](x, latent, label_class_dict=label_class_dict, label=label_128_256, class_style=self.styleMatrix, )
+        x = self.linears[14](x)
+
+        x = torch.cat([fourier_feature3, x], 1)
+
+        label_256_512 = label
+
+        x = self.linears[15](x, latent, label_class_dict=label_class_dict, label=label_256_512,
+                             class_style=self.styleMatrix, )
+        x = self.linears[16](x, latent, label_class_dict=label_class_dict, label=label_256_512,
+                             class_style=self.styleMatrix, )
+        x = self.linears[17](x, latent, label_class_dict=label_class_dict, label=label_256_512,
+                             class_style=self.styleMatrix, )
+        x = self.linears[18](x, latent, label_class_dict=label_class_dict, label=label_256_512,
+                             class_style=self.styleMatrix, )
+
+
+
+        rgb = self.to_rgbs[0](x, latent, rgb,label_class_dict=label_class_dict,label=label_128_256,class_style=self.styleMatrix,)
 
 
         if return_latents:
