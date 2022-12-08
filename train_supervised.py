@@ -36,9 +36,12 @@ opt = config.read_arguments(train=True)
 
 # opt.Matrix_Computation = True
 # opt.apply_MOD_CLADE = True
+# opt.Matrix_Computation = True
+#
 # opt.dataroot = '/Users/hlj/Documents/NoSync.nosync/FA/cityscapes'
 # opt.gpu_ids = '-1'
-# opt.netG = 4
+# opt.netG = 3
+
 device = "cuda"
 
 

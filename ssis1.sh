@@ -2,7 +2,7 @@
 
 #Slurm parameters
 #SBATCH --job-name=oasis1_t
-#SBATCH --output=oasis1_%j.%N.out
+#SBATCH --output=oasis1_correct_emb_tanh_%j.%N.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=6-23:00:00
@@ -22,5 +22,5 @@ conda activate /usrhomes/s1434/anaconda3/envs/myenv
 
 python train_supervised.py --name oasis_cityscapes --dataset_mode cityscapes --gpu_ids 0 \
 --dataroot /data/public/cityscapes --batch_size 1  \
---model_supervision 2 --netG 1 --channels_G 64 --num_epochs 500 \
---checkpoints_dir ./checkpoints_1_tanh --only_CLADE
+--model_supervision 2 --netG 2 --channels_G 64 --num_epochs 500 \
+--checkpoints_dir ./checkpoints_1_correct_emb_tanh_b1 --only_CLADE

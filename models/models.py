@@ -30,16 +30,18 @@ class OASIS_model(nn.Module):
         if opt.netG == 9:
             self.netG = generators.ResidualWaveletGenerator_1(opt)
         elif opt.netG == 1:
-            self.netG = generators.ImplicitGenerator(opt=opt,size=512, hidden_size=512, style_dim=512, n_mlp=8,
+            self.netG = generators.ImplicitGenerator(opt=opt,size=(256,512), hidden_size=512, style_dim=512, n_mlp=8,
                                   activation=None, channel_multiplier=2)
         elif opt.netG == 2:
-            self.netG = generators.ImplicitGenerator_multi_scale(opt=opt,size=512, hidden_size=512, style_dim=512, n_mlp=8,
-                                  activation=None, channel_multiplier=2)
+            self.netG = generators.ImplicitGenerator_tanh(opt=opt, size=(256, 512), hidden_size=512,
+                                                                style_dim=512, n_mlp=8,
+                                                                activation=None, channel_multiplier=2)
         elif opt.netG == 3:
-            self.netG = generators.ImplicitGenerator_direct_emb(opt=opt, size=512, hidden_size=512, style_dim=512,n_mlp=8,
+            self.netG = generators.ImplicitGenerator_multiscale_(opt=opt,size=(8,16), hidden_size=512, style_dim=512, n_mlp=8,
                                   activation=None, channel_multiplier=2)
+
         elif opt.netG == 4:
-            self.netG = generators.ImplicitGenerator_multiscale_direct_emb(opt=opt, size=512, hidden_size=512, style_dim=512,n_mlp=8,
+            self.netG = generators.ImplicitGenerator_2scale_(opt=opt, size=(128,256), hidden_size=512, style_dim=512,n_mlp=8,
                                   activation=None, channel_multiplier=2)
         else:
             self.netG = generators.OASIS_Generator(opt)

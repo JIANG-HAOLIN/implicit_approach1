@@ -484,40 +484,19 @@ class NoiseInjection(nn.Module):
 
 
 class ConstantInput(nn.Module):
-    def  __init__(self, channel, size=4):
+    def  __init__(self, channel, size=None,):
         super().__init__()
-
-        self.input = nn.Parameter(torch.randn(1, channel, 256, 512))
+        # print(size)
+        self.learnable_vectors = nn.Parameter(torch.randn(1, channel, size[0], size[1]))
+        # print(self.learnable_vectors.shape)
 
     def forward(self, input):
         batch = input.shape[0]
-        out = self.input.repeat(batch, 1, 1, 1)
+        out = self.learnable_vectors.repeat(batch, 1, 1, 1)
+        # print(out.shape)
         ##output = [batch,channel,size.512]
         return out
 
-class ConstantInput_multi_scale(nn.Module):
-    def __init__(self, channel, size=4):
-        super().__init__()
-
-        self.input = nn.Parameter(torch.randn(1, channel, 32, 64))
-
-    def forward(self, input):
-        batch = input.shape[0]
-        out = self.input.repeat(batch, 1, 1, 1)
-        ##output = [batch,channel,size.512]
-        return out
-
-class ConstantInput_multiscale_direct_emb(nn.Module):
-    def __init__(self, channel, size=4):
-        super().__init__()
-
-        self.input = nn.Parameter(torch.randn(1, channel, 128, 256))
-
-    def forward(self, input):
-        batch = input.shape[0]
-        out = self.input.repeat(batch, 1, 1, 1)
-        ##output = [batch,channel,size.512]
-        return out
 
 
 class StyledConv(nn.Module):
@@ -815,3 +794,16 @@ class StyledResBlock(nn.Module):
         out = (out + skip) / math.sqrt(2)
 
         return out
+
+## @jhl new
+
+# class upscale_Interpolate(nn.Module):
+#     def __init__(self, size, mode):
+#         super(upscale_Interpolate, self).__init__()
+#         self.interp = nn.functional.interpolate
+#         self.size = size
+#         self.mode = mode
+#
+#     def forward(self, x):
+#         x = self.interp(x, size=self.size, mode=self.mode, align_corners=False)
+#         return x
