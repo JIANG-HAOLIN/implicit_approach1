@@ -149,6 +149,8 @@ class EqualLinear(nn.Module):
             out = fused_leaky_relu(out, self.bias * self.lr_mul)
 
         else:
+            # self.weight = self.weight.to('cuda')
+            # print(input.device, self.weight.device, )
             out = F.linear(
                 input, self.weight * self.scale, bias=self.bias * self.lr_mul
             )

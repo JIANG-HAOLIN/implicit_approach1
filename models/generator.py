@@ -770,7 +770,7 @@ class ImplicitGenerator_multiscale_(nn.Module):
         ## in total n_intermediate blocks
         self.to_rgb_stride = 4
         ##how many ModFC between two tRGB==>in this case, 2 ModFC layers
-        self.blocks = []
+        self.blocks = nn.ModuleList()
         self.coords = []
 
         self.coords = [(tt.convert_to_coord_format(opt.batch_size, self.size_dict[i][0],
