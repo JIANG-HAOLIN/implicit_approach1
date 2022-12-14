@@ -64,6 +64,7 @@ def add_all_arguments(parser, train):
     parser.add_argument('--apply_MOD_CLADE', action='store_true', default=False, help='apply both MOD and CLADE')##jhl
     parser.add_argument('--only_CLADE', action='store_true', default=False, help='no MOD, apply only CLADE')
     parser.add_argument('--Matrix_Computation', action='store_true', default=False, help='use only Matrix_Computation')
+    parser.add_argument('--add_dist', action='store_true', default=False, help='implement intra-class positional embedding')
 
     if train:
         parser.add_argument('--freq_print', type=int, default=1000, help='frequency of showing training results')

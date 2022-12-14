@@ -7,6 +7,12 @@ from torch.nn import functional as F
 
 from .op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
 
+
+import matplotlib.pyplot as plt
+import cv2
+import os
+from PIL import Image
+
 import gc
 
 
@@ -186,6 +192,7 @@ class ModulatedConv2d(nn.Module):
         downsample=False,
         blur_kernel=[1, 3, 3, 1],
         approach= -1,
+        add_dist = False
     ):
         super().__init__()
         self.approach = approach
@@ -195,6 +202,7 @@ class ModulatedConv2d(nn.Module):
         self.out_channel = out_channel
         self.upsample = upsample
         self.downsample = downsample
+        self.add_dist = add_dist
 
         if upsample:
             factor = 2
@@ -236,6 +244,19 @@ class ModulatedConv2d(nn.Module):
         else:
             pass
 
+        if self.add_dist :
+            if (self.approach == 0 or self.approach == 1) :
+                self.dist_conv_w = nn.Conv2d(2, 1, kernel_size=1, padding=0)
+                nn.init.zeros_(self.dist_conv_w.weight)
+                nn.init.zeros_(self.dist_conv_w.bias)
+                self.dist_conv_b = nn.Conv2d(2, 1, kernel_size=1, padding=0)
+                nn.init.zeros_(self.dist_conv_b.weight)
+                nn.init.zeros_(self.dist_conv_b.bias)
+            elif self.approach ==2 :
+                pass
+            else:
+                pass
+
 
 
 
@@ -245,7 +266,7 @@ class ModulatedConv2d(nn.Module):
             f'upsample={self.upsample}, downsample={self.downsample})'
         )
 
-    def forward(self, input, style,label_class_dict=None,label = None,class_style = None,):
+    def forward(self, input, style,label_class_dict=None,label = None,class_style = None,dist_map = None):
         batch, in_channel, height, width = input.shape
 
         # style = self.modulation(style).view(batch, 1, in_channel, 1, 1)##[1,1,1024,1,1,]
@@ -312,30 +333,6 @@ class ModulatedConv2d(nn.Module):
 
         else:
 
-
-
-            # ##Matrix computation
-            # style = self.modulation(style)
-            # input = input.view(batch, 1, in_channel, height, width )
-            # weight = self.weight.view(batch, self.out_channel, in_channel, 1, 1)
-            # style = style.view(batch, 35, in_channel, 1, 1)
-            # label = label.view(batch, 35, 1, height, width)
-            # image_style_map = torch.sum((style * label),dim=1, keepdim=True)
-            # # print(image_style_map.size())
-            # weight = self.scale * weight * image_style_map
-            # # print(weight.size())
-            # demod = torch.rsqrt(torch.sum(weight.pow(2), dim=2, keepdim=True) + 1e-8)
-            # # print(demod.size())
-            # weight = weight * demod
-            # # print(weight.size())
-            # out = torch.sum(weight * input, dim=2)
-            # # print(out.size())
-            # _, _, height, width = out.shape
-            # out = out.view(batch, self.out_channel, height, width)
-
-
-
-
             # ###pixel interation
             # input = input.reshape(height, width, batch,1, in_channel)
             # out   = []
@@ -360,9 +357,6 @@ class ModulatedConv2d(nn.Module):
             #         # print(out)
             # _,height, width, _ , _ = out.shape
             # out = out.view(batch, self.out_channel, height, width)
-
-
-
 
 
             # ###class iteration
@@ -398,7 +392,6 @@ class ModulatedConv2d(nn.Module):
             # out = out.view(batch, self.out_channel, height, width)
 
 
-
             ## Modulation+CLADE layer
             if self.approach == 0:
                 style = self.modulation(style).view(batch, 1, in_channel, 1, 1)  ##[1,1,1024,1,1,]
@@ -424,6 +417,12 @@ class ModulatedConv2d(nn.Module):
                 #before permute:[n, h, w, c] after permute [n, c, h, w]
                 class_bias = F.embedding(label_class_dict, clade_bias_init).permute(0, 3, 1, 2)
                 # before permute:[n, h, w, c] after permute [n, c, h, w]
+
+                if self.add_dist:
+                    input_dist = F.interpolate(dist_map, size=input.size()[2:], mode='nearest')
+                    class_weight = class_weight * (1 + self.dist_conv_w(input_dist))
+                    class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
+
                 out = out * class_weight + class_bias
 
 
@@ -448,6 +447,12 @@ class ModulatedConv2d(nn.Module):
                 clade_bias_init = self.clade_bias_modulation(style_concatenation).view(batch, 35, self.out_channel)
                 class_weight = torch.einsum('nic,nihw->nchw', clade_weight_init, label)
                 class_bias = torch.einsum('nic,nihw->nchw', clade_bias_init, label)
+
+                if self.add_dist:
+                    input_dist = F.interpolate(dist_map, size=input.size()[2:], mode='nearest')
+                    class_weight = class_weight * (1 + self.dist_conv_w(input_dist))
+                    class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
+
                 out = out * class_weight + class_bias
 
 
@@ -514,8 +519,10 @@ class StyledConv(nn.Module):
         activation=None,
         downsample=False,
         approach=-1,
+        add_dist = False
     ):
         super().__init__()
+        self.add_dist = add_dist
         self.approach = approach
         self.conv = ModulatedConv2d(
             in_channel,
@@ -527,6 +534,7 @@ class StyledConv(nn.Module):
             demodulate=demodulate,
             downsample=downsample,
             approach=self.approach,
+            add_dist= self.add_dist
         )
 
         self.activation = activation
@@ -540,8 +548,8 @@ class StyledConv(nn.Module):
         else:
             self.activate = FusedLeakyReLU(out_channel)
 
-    def forward(self, input, style, noise=None,label_class_dict=None,label=None,class_style=None):
-        out = self.conv(input, style,label_class_dict=label_class_dict,label=label,class_style=class_style)
+    def forward(self, input, style, noise=None,label_class_dict=None,label=None,class_style=None,dist_map = None):
+        out = self.conv(input, style,label_class_dict=label_class_dict,label=label,class_style=class_style,dist_map=dist_map)
         out = self.noise(out, noise=noise)
         if self.activation == 'sinrelu' or self.activation == 'sin':
             out = out + self.bias
@@ -551,18 +559,21 @@ class StyledConv(nn.Module):
 
 
 class ToRGB(nn.Module):
-    def __init__(self, in_channel, style_dim, upsample=True, blur_kernel=[1, 3, 3, 1],approach=-1):#jhl
+    def __init__(self, in_channel, style_dim, upsample=True, blur_kernel=[1, 3, 3, 1],approach=-1,add_dist = False):#jhl
         super().__init__()
+        self.add_dist = add_dist
         self.approach = approach
         self.upsample = upsample
         if upsample:
             self.upsample = Upsample(blur_kernel)
 
-        self.conv = ModulatedConv2d(in_channel, 3, 1, style_dim, demodulate=False,approach=self.approach,)#jhl
+        self.conv = ModulatedConv2d(in_channel, 3, 1, style_dim, demodulate=False,
+                                    approach=self.approach,add_dist=self.add_dist)#jhl
         self.bias = nn.Parameter(torch.zeros(1, 3, 1, 1))
 
-    def forward(self, input, style, skip=None,label_class_dict=None,label=None,class_style=None):
-        out = self.conv(input, style,label_class_dict=label_class_dict,label=label,class_style=class_style)
+    def forward(self, input, style, skip=None,label_class_dict=None,label=None,class_style=None,dist_map=None):
+        out = self.conv(input, style,
+                        label_class_dict=label_class_dict,label=label,class_style=class_style,dist_map=dist_map)
         out = out + self.bias
 
         if skip is not None:
@@ -809,3 +820,77 @@ class StyledResBlock(nn.Module):
 #     def forward(self, x):
 #         x = self.interp(x, size=self.size, mode=self.mode, align_corners=False)
 #         return x
+
+def make_dist_train_val_cityscapes_datasets(mask_batch=None,dir = '/home/tzt/dataset/cityscapes/',norm='norm'):
+    # label_dir = os.path.join(dir, 'gtFine')
+    # phases = ['val','train']
+    # for phase in phases:
+    #     if 'test' in phase:
+    #         continue
+    #     print('process',phase,'dataset')
+    #     citys = sorted(os.listdir(os.path.join(label_dir,phase)))
+    #     for city in citys:
+    #         label_path = os.path.join(label_dir, phase, city)
+    #         label_names_all = sorted(os.listdir(label_path))
+    #         label_names = [p for p in label_names_all if p.endswith('_labelIds.png')]
+    #         for label_name in label_names:
+    #             print(label_name)
+    #             mask = np.array(Image.open(os.path.join(label_path, label_name)))
+                # check_mask(mask)
+    batch_size = mask_batch.shape[0]
+    dist_cat_np_batch = []
+    for i in range(batch_size):
+        mask = np.array(mask_batch[i,:,:])##(256,512)
+        h_offset, w_offset = cal_connectedComponents(mask, norm)
+        dist_cat_np = np.concatenate((h_offset[np.newaxis, ...], w_offset[np.newaxis, ...]), 0)
+    # dist_name = label_name[:-12]+'distance.npy'
+    # np.save(os.path.join(label_path, dist_name), dist_cat_np)
+        dist_cat_np_batch.append(dist_cat_np)
+    return torch.Tensor(np.array(dist_cat_np_batch))
+
+
+def cal_connectedComponents(mask, normal_mode='norm'):
+    label_idxs = np.unique(mask)
+    H, W = mask.shape
+    out_h_offset = np.float32(np.zeros_like(mask))
+    out_w_offset = np.float32(np.zeros_like(mask))
+    for label_idx in label_idxs:
+        if label_idx == 0:
+            continue
+        tmp_mask = np.float32(mask.copy())
+        tmp_mask[tmp_mask!=label_idx] = -1
+        tmp_mask[tmp_mask==label_idx] = 255
+        tmp_mask[tmp_mask==-1] = 0
+        _, labels, stats, centroids = cv2.connectedComponentsWithStats(np.uint8(tmp_mask))
+        connected_numbers = len(centroids)-1
+        for c_idx in range(1,connected_numbers+1):
+            tmp_labels = np.float32(labels.copy())
+            tmp_labels[tmp_labels!=c_idx] = 0
+            tmp_labels[tmp_labels==c_idx] = 1
+            h_offset = (np.repeat(np.array(range(H))[...,np.newaxis],W,1) - centroids[c_idx][1])*tmp_labels
+            w_offset = (np.repeat(np.array(range(W))[np.newaxis,...],H,0) - centroids[c_idx][0])*tmp_labels
+            h_offset = normalize_dist(h_offset, normal_mode)
+            w_offset = normalize_dist(w_offset, normal_mode)
+            out_h_offset += h_offset
+            out_w_offset += w_offset
+
+    return out_h_offset, out_w_offset
+
+def normalize_dist(offset, normal_mode):
+    if normal_mode == 'no':
+        return offset
+    else:
+        return offset / np.max(np.abs(offset)+1e-5)
+
+def show_results(ins):
+    plt.imshow(ins)
+    plt.show()
+
+def make_dir(path):
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+def check_mask(mask, check_idx = 255):
+    idx = np.unique(mask)
+    if check_idx in idx:
+        print(idx)

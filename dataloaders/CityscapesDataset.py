@@ -83,6 +83,7 @@ class CityscapesDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         image = Image.open(os.path.join(self.paths[0], self.images[self.mixed_index[idx]])).convert('RGB')
         label = Image.open(os.path.join(self.paths[1], self.labels[idx]))
+        # label = np.array(label).max()
         image, label = self.transforms(image, label)
         label = label * 255
         if self.for_supervision :

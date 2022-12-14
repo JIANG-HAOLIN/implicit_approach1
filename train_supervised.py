@@ -20,6 +20,8 @@ import models.tensor_transforms as tt
 # from models.models import *
 import numpy as np
 
+from models.blocks import make_dist_train_val_cityscapes_datasets as distance_map
+
 
 # device="cuda"#@jhl
 
@@ -36,12 +38,12 @@ opt = config.read_arguments(train=True)
 
 # opt.Matrix_Computation = True
 # opt.apply_MOD_CLADE = True
-# opt.Matrix_Computation = True
-#
+# opt.only_CLADE = True
+# opt.add_dist = True
 # opt.dataroot = '/Users/hlj/Documents/NoSync.nosync/FA/cityscapes'
 # opt.gpu_ids = '-1'
-# opt.netG = 3
-
+# opt.netG = 2
+# opt.batch_size = 2
 device = "cuda"
 
 
@@ -138,12 +140,18 @@ for epoch in range(start_epoch, opt.num_epochs):
             continue
         already_started = True
         cur_iter = epoch*len(dataloader_supervised) + i
-        image, label = models.preprocess_input(opt, data_i)
+        image, label, label_map = models.preprocess_input(opt, data_i)
 
-        # label_class_dict = torch.sum((label*label_class_extractor),dim=1,keepdim=True)
-        label_class_dict = torch.argmax(label, 1).long()  # [n, h, w]
+        # label_class_dict = torch.sum((label*label_class_extractor),dim=1,keepdim=True)##don't use this
 
+        # label_class_dict = torch.argmax(label, 1)##output original labelmap  # [n, h, w]
+        # equal = torch.sum(label_map - label_class_dict, dim=(0, 1, 2, 3))
 
+        #label_class_dict = label_map.squeeze(1)##just use original labelmap directly
+
+        dist_map = distance_map(label_map.squeeze(1).to('cpu'), dir='/home/tzt/dataset/cityscapes/', norm='norm').to(device)
+
+        label_class_dict = torch.cat((label_map,dist_map),dim=1)
 
 
         # --- generator update ---#

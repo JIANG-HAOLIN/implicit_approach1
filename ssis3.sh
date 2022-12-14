@@ -1,8 +1,8 @@
 #!/bin/bash -l
 
 #Slurm parameters
-#SBATCH --job-name=o3_m_8
-#SBATCH --output=o3_8_16_%j.%N.out
+#SBATCH --job-name=o1_m_4
+#SBATCH --output=o1_m_4_%j.%N.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=6-23:00:00
@@ -26,4 +26,4 @@ conda activate /usrhomes/s1434/anaconda3/envs/myenv
 python train_supervised.py --name oasis_cityscapes --dataset_mode cityscapes --gpu_ids 0 \
 --dataroot /data/public/cityscapes --batch_size 4  \
 --model_supervision 2 --netG 3 --channels_G 64 --num_epochs 500 \
---checkpoints_dir ./checkpoints_CLADE_8_16_batch4_tanh_%j.%N --only_CLADE
+--checkpoints_dir ./checkpoints_multiscale_approach1_8_16_batch4_tanh_%j.%N --only_CLADE

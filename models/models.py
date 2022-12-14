@@ -925,7 +925,8 @@ def preprocess_input(opt, data):
     else:
         input_label = torch.FloatTensor(bs, nc, h, w).zero_()
     input_semantics = input_label.scatter_(1, label_map, 1.0)
-    return data['image'], input_semantics
+    ####!!原本的label是一张图像!!通过scatter_函数转换成one-shot coding!!!
+    return data['image'], input_semantics, label_map
 
 
 def generate_labelmix(label, fake_image, real_image):

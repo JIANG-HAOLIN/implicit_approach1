@@ -247,6 +247,7 @@ class ImplicitGenerator(nn.Module):
                 input_is_latent=False,
                 edges=None,
                 ):
+        label_class_dict,dist_map = label_class_dict[:,0,:,:],label_class_dict[:,1:,:,:]
         # print("input latent code:",latent)
         latent = latent[0]##[1,512]
         ##input noirse z
@@ -331,6 +332,7 @@ class ImplicitGenerator_tanh(nn.Module):
             self.approach = 2
         else:
             self.approach = -1
+        self.add_dist = opt.add_dist
 
         self.tanh = nn.Tanh()
 
@@ -360,7 +362,8 @@ class ImplicitGenerator_tanh(nn.Module):
                                           style_dim,
                                           demodulate=demodulate,
                                           activation=activation,
-                                          approach=self.approach,  # jhl
+                                          approach=self.approach,
+                                          add_dist=self.add_dist# jhl
                                           )
         ###kernel_size = 1===>first modFC layer!!only one layer!!input=embbed coords!!
 
@@ -379,12 +382,16 @@ class ImplicitGenerator_tanh(nn.Module):
             out_channels = self.channels[i]
             self.linears.append(CIPblocks.StyledConv(in_channels, out_channels, 1, style_dim,
                                                      demodulate=demodulate, activation=activation,
-                                                     approach=self.approach, ))  # jhl
+                                                     approach=self.approach,
+                                                     add_dist=self.add_dist))  # jhl
             self.linears.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
                                                      demodulate=demodulate, activation=activation,
-                                                     approach=self.approach, ))  # jhl
+                                                     approach=self.approach,
+                                                     add_dist=self.add_dist))  # jhl
             self.to_rgbs.append(
-                CIPblocks.ToRGB(out_channels, style_dim, upsample=False, approach=self.approach, ))  # jhl
+                CIPblocks.ToRGB(out_channels, style_dim, upsample=False,
+                                approach=self.approach,
+                                add_dist=self.add_dist))  # jhl
             ###upsample turned off manually
             # print(out_channels)
             in_channels = out_channels
@@ -422,6 +429,7 @@ class ImplicitGenerator_tanh(nn.Module):
                 input_is_latent=False,
                 edges=None,
                 ):
+        label_class_dict,dist_map = label_class_dict[:,0,:,:].long(),label_class_dict[:,1:,:,:]
         # print("input latent code:",latent)
         latent = latent[0]  ##[1,512]
         ##input noirse z
@@ -464,16 +472,27 @@ class ImplicitGenerator_tanh(nn.Module):
 
         rgb = 0
 
-        x = self.conv1(x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
+        x = self.conv1(x,latent,
+                       label_class_dict=label_class_dict,
+                       label=label,
+                       class_style=self.styleMatrix,
+                       dist_map=dist_map
+                       )
         ##first ModFC layer
         for i in range(self.n_intermediate):  ##2-8 ModFC layers
             # print(i)
             for j in range(self.to_rgb_stride):  ##2xModFC
-                x = self.linears[i * self.to_rgb_stride + j](x, latent, label_class_dict=label_class_dict, label=label,
-                                                             class_style=self.styleMatrix, )
+                x = self.linears[i * self.to_rgb_stride + j](x, latent,
+                                                             label_class_dict=label_class_dict,
+                                                             label=label,
+                                                             class_style=self.styleMatrix,
+                                                             dist_map=dist_map)
 
-            rgb = self.to_rgbs[i](x, latent, rgb, label_class_dict=label_class_dict, label=label,
-                                  class_style=self.styleMatrix, )
+            rgb = self.to_rgbs[i](x,latent,rgb,
+                                  label_class_dict=label_class_dict,
+                                  label=label,
+                                  class_style=self.styleMatrix,
+                                  dist_map=dist_map)
             ####skip=rgb ==> rgb image accumulation!!
 
         if return_latents:
@@ -511,6 +530,7 @@ class ImplicitGenerator_2scale_(nn.Module):
             self.approach = 2
         else:
             self.approach = -1
+        self.add_dist = opt.add_dist
 
         self.tanh = nn.Tanh()
 
@@ -546,7 +566,8 @@ class ImplicitGenerator_2scale_(nn.Module):
                                           style_dim,
                                           demodulate=demodulate,
                                           activation=activation,
-                                          approach=self.approach,#jhl
+                                          approach=self.approach,
+                                          add_dist=self.add_dist,#jhl
                                           )
         self.conv2 = CIPblocks.StyledConv(512,  ##the real in_channel 1024
                                           256,  ##actually is out_channel
@@ -554,7 +575,8 @@ class ImplicitGenerator_2scale_(nn.Module):
                                           style_dim,
                                           demodulate=demodulate,
                                           activation=activation,
-                                          approach=self.approach,  # jhl
+                                          approach=self.approach,
+                                          add_dist=self.add_dist,# jhl
                                           )
         ###kernel_size = 1===>first modFC layer!!only one layer!!input=embbed coords!!
 
@@ -574,11 +596,11 @@ class ImplicitGenerator_2scale_(nn.Module):
 
             out_channels = self.channels[i]
             self.linears.append(CIPblocks.StyledConv(in_channels, out_channels, 1, style_dim,
-                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+                                           demodulate=demodulate, activation=activation,approach=self.approach,add_dist=self.add_dist,))#jhl
             self.linears.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
-                                           demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
+                                           demodulate=demodulate, activation=activation,approach=self.approach,add_dist=self.add_dist,))#jhl
 
-            self.to_rgbs.append(CIPblocks.ToRGB(out_channels, style_dim, upsample=False,approach=self.approach,))#jhl
+            self.to_rgbs.append(CIPblocks.ToRGB(out_channels, style_dim, upsample=False,approach=self.approach,add_dist=self.add_dist,))#jhl
                                                                                         ###upsample turned off manually
             # print(out_channels)
             in_channels = out_channels
@@ -624,6 +646,8 @@ class ImplicitGenerator_2scale_(nn.Module):
                 input_is_latent=False,
                 edges=None,
                 ):
+        label_class_dict,dist_map = label_class_dict[:,0,:,:],label_class_dict[:,1:,:,:]
+
         # print("input latent code:",latent)
         latent = latent[0]##[1,512]
         ##input noirse z
@@ -669,7 +693,7 @@ class ImplicitGenerator_2scale_(nn.Module):
         label = label_128_256
         label_class_dict = label_class_dict_128_256
 
-        x = self.conv1(x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+        x = self.conv1(x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,dist_map=dist_map)
         ##first ModFC layer
 
 
@@ -682,16 +706,17 @@ class ImplicitGenerator_2scale_(nn.Module):
                 x = F.interpolate(x,scale_factor=2,mode = 'nearest')
                 x = torch.cat([x,self.lff1(coords)],1)
                 x = self.conv2(x, latent, label_class_dict=label_class_dict, label=label,
-                               class_style=self.styleMatrix, )
+                               class_style=self.styleMatrix,dist_map=dist_map)
                 rgb = F.interpolate(rgb,scale_factor=2,mode = 'nearest')
 
 
             for j in range(self.to_rgb_stride):##2xModFC
-                x = self.linears[i*self.to_rgb_stride + j](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+                x = self.linears[i*self.to_rgb_stride + j](x, latent,label_class_dict=label_class_dict,
+                                                           label=label,class_style=self.styleMatrix,dist_map=dist_map)
 
 
 
-            rgb = self.to_rgbs[i](x, latent, rgb,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+            rgb = self.to_rgbs[i](x, latent, rgb,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,dist_map=dist_map)
                                         ####skip=rgb ==> rgb image accumulation!!
 
         if return_latents:
@@ -795,6 +820,12 @@ class ImplicitGenerator_multiscale_(nn.Module):
             block.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
                                            demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
             block.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
+                                              demodulate=demodulate, activation=activation,
+                                              approach=self.approach, ))  # jhl
+            # block.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
+            #                                   demodulate=demodulate, activation=activation,
+            #                                   approach=self.approach, ))  # jhl
+            block.append(CIPblocks.StyledConv(out_channels, out_channels, 1, style_dim,
                                            demodulate=demodulate, activation=activation,approach=self.approach,))#jhl
             block.append(
                 CIPblocks.ToRGB(out_channels, style_dim, upsample=False, approach=self.approach, ))  # jhl
@@ -867,6 +898,8 @@ class ImplicitGenerator_multiscale_(nn.Module):
                 input_is_latent=False,
                 edges=None,
                 ):
+        label_class_dict,dist_map = label_class_dict[:,0,:,:],label_class_dict[:,1:,:,:]
+
         # print("input latent code:",latent)
         latent = latent[0]##[1,512]
         ##input noirse z
@@ -876,6 +909,7 @@ class ImplicitGenerator_multiscale_(nn.Module):
 
         if not input_is_latent:
             latent = self.style(latent)
+
 
         x = self.lff(self.coords[0])
         ##Fourier Features:simple linear transformation with sin activation
@@ -902,14 +936,18 @@ class ImplicitGenerator_multiscale_(nn.Module):
         for i in range(self.n_blocks):  ## for all blocks except final one
             x = self.blocks[i][0](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
             x = self.blocks[i][1](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
-            x = self.blocks[i][2](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
-            rgb_original_size = self.blocks[i][3](x, latent, rgb,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
-            rbg = F.interpolate(rgb_original_size,scale_factor=2,mode = 'nearest')
-            x = self.blocks[i][4](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+            x = self.blocks[i][2](x, latent, label_class_dict=label_class_dict, label=label,
+                                  class_style=self.styleMatrix, )
+            # x = self.blocks[i][3](x, latent, label_class_dict=label_class_dict, label=label,
+            #                       class_style=self.styleMatrix, )
+            x = self.blocks[i][3](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+            rgb_o_s = self.blocks[i][4](x, latent, rgb,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
+            rgb = F.interpolate(rgb_o_s,scale_factor=2,mode = 'nearest')
+            x = self.blocks[i][5](x, latent,label_class_dict=label_class_dict,label=label,class_style=self.styleMatrix,)
             x = F.interpolate(x,scale_factor=2,mode = 'nearest')
             label_class_dict = label_class_dict_all_res[i+1]
             label = label_all_res[i+1]
-            fourier_features = self.blocks[i][5](self.coords[i+1])
+            fourier_features = self.blocks[i][6](self.coords[i+1])
             x = torch.cat((x,fourier_features),dim = 1)
         x = self.final_block[0](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
         x = self.final_block[1](x, latent, label_class_dict=label_class_dict, label=label, class_style=self.styleMatrix, )
@@ -923,6 +961,13 @@ class ImplicitGenerator_multiscale_(nn.Module):
             return rgb, latent
         else:
             return self.tanh(rgb), None
+
+
+
+
+
+
+
 
 
 

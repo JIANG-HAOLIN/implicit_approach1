@@ -1,8 +1,8 @@
 #!/bin/bash -l
 
 #Slurm parameters
-#SBATCH --job-name=oasis0_t
-#SBATCH --output=oasis0_correct_emb_tanh_%j.%N.out
+#SBATCH --job-name=1o0_ICPE
+#SBATCH --output=1o0_ICPE_tanh_%j.%N.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=6-23:00:00
@@ -10,7 +10,10 @@
 # SBATCH --gpus=1
 #SBATCH --nodes=1
 #SBATCH --qos=batch
-#SBATCH --gpus=rtx_a5000:1
+#SBATCH --gpus=geforce_rtx_2080_ti:1
+# SBATCH --gpus=geforce_gtx_titan_x:1
+# SBATCH --gpus=geforce_gtx_1080_ti:1
+# SBATCH --gpus=rtx_a5000:1
 
 # Activate everything you need
 #echo $PYENV_ROOT
@@ -22,4 +25,4 @@ conda activate /usrhomes/s1434/anaconda3/envs/myenv
 python train_supervised.py --name oasis_cityscapes --dataset_mode cityscapes --gpu_ids 0 \
 --dataroot /data/public/cityscapes --batch_size 1  \
 --model_supervision 2 --netG 2 --channels_G 64 --num_epochs 500 \
---checkpoints_dir ./checkpoints_0_correct_emb_tanh_b1 --apply_MOD_CLADE
+--checkpoints_dir ./checkpoints_1o0_ICPE_tanh --apply_MOD_CLADE --add_dist
