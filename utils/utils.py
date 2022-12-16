@@ -9,7 +9,9 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image
 import matplotlib.backends
+from models.blocks import make_dist_train_val_cityscapes_datasets as distance_map
 
+utils_device = 'cuda'
 
 def fix_seed(seed):
     random.seed(seed)
@@ -188,9 +190,13 @@ def update_EMA(model, cur_iter, dataloader, opt, force_run_stats=False):
         with torch.no_grad():
             num_upd = 0
             for i, data_i in enumerate(dataloader):
-                image, label = models.preprocess_input(opt, data_i)
+                image, label, label_map  = models.preprocess_input(opt, data_i)
 
-                label_class_dict = torch.argmax(label, 1).long()
+                dist_map = distance_map(label_map.squeeze(1).to('cpu'), dir='/home/tzt/dataset/cityscapes/',
+                                        norm='norm').to(utils_device)
+
+                label_class_dict = torch.cat((label_map, dist_map), dim=1)
+
                 converted = model.module.coords
                 latent = model.module.latent
                 fake,_ = model.module.netEMA(label=label,

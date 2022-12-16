@@ -419,9 +419,18 @@ class ModulatedConv2d(nn.Module):
                 # before permute:[n, h, w, c] after permute [n, c, h, w]
 
                 if self.add_dist:
-                    input_dist = F.interpolate(dist_map, size=input.size()[2:], mode='nearest')
-                    class_weight = class_weight * (1 + self.dist_conv_w(input_dist))
-                    class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
+                    # input_dist = F.interpolate(dist_map, size=input.size()[2:], mode='nearest')
+                    # class_weight = class_weight * (1 + self.dist_conv_w(input_dist))
+                    # class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
+
+                    input_dist = dist_map
+                    class_weight= class_weight.to('cpu')
+                    class_bias= class_bias.to('cpu')
+                    alpha_weight = (1 + self.dist_conv_w(input_dist)).to('cpu')
+                    print(alpha_weight.shape)
+                    alpha_bias = 1 + self.dist_conv_b(input_dist).to('cpu')
+                    class_weight = (class_weight * alpha_weight).to('cuda')
+                    class_bias = (class_bias * alpha_bias).to('cuda')
 
                 out = out * class_weight + class_bias
 
@@ -449,9 +458,18 @@ class ModulatedConv2d(nn.Module):
                 class_bias = torch.einsum('nic,nihw->nchw', clade_bias_init, label)
 
                 if self.add_dist:
-                    input_dist = F.interpolate(dist_map, size=input.size()[2:], mode='nearest')
-                    class_weight = class_weight * (1 + self.dist_conv_w(input_dist))
-                    class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
+                    # input_dist = F.interpolate(dist_map, size=input.size()[2:], mode='nearest')
+                    #
+                    # class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
+
+                    input_dist = dist_map
+                    class_weight = class_weight.to('cpu')
+                    class_bias = class_bias.to('cpu')
+                    alpha_weight = (1 + self.dist_conv_w(input_dist)).to('cpu')
+                    print(alpha_weight.shape)
+                    alpha_bias = 1 + self.dist_conv_b(input_dist).to('cpu')
+                    class_weight = (class_weight * alpha_weight).to('cuda')
+                    class_bias = (class_bias * alpha_bias).to('cuda')
 
                 out = out * class_weight + class_bias
 
