@@ -339,8 +339,8 @@ class ImplicitGenerator_tanh(nn.Module):
         self.size = size
         demodulate = True
         self.demodulate = demodulate
-        self.lff = CIPblocks.LFF(hidden_size)
-        self.emb = CIPblocks.ConstantInput(hidden_size, size=size)
+        self.lff = CIPblocks.LFF(int(hidden_size/2))
+        self.emb = (CIPblocks.ConstantInput(hidden_size, size=size))
 
         self.channels = {
             0: 512,
@@ -374,7 +374,7 @@ class ImplicitGenerator_tanh(nn.Module):
         self.log_size = int(CIPblocks.math.log(max(size), 2))
         ## 8 Layers
 
-        self.n_intermediate = self.log_size - 1
+        self.n_intermediate = self.log_size - 5
         ## intermediate layer(7 layers except first layer)
         self.to_rgb_stride = 2
         ##how many ModFC between two tRGB==>in this case, 2 ModFC layers
@@ -429,7 +429,7 @@ class ImplicitGenerator_tanh(nn.Module):
                 input_is_latent=False,
                 edges=None,
                 ):
-        label_class_dict,dist_map = label_class_dict[:,0,:,:].long(),label_class_dict[:,1:,:,:]
+        label_class_dict,dist_map = label_class_dict[:,0,:,:],label_class_dict[:,1:,:,:]
         # print("input latent code:",latent)
         latent = latent[0]  ##[1,512]
         ##input noirse z
@@ -445,11 +445,13 @@ class ImplicitGenerator_tanh(nn.Module):
         ##combined style vector [35,512]
 
         x = self.lff(coords)
+        x = torch.cat((x,self.lff(dist_map)),dim = 1)
         ##Fourier Features:simple linear transformation with sin activation
         ##[N,512,256,512]
         # print(x)
 
         batch_size, _, h, w = coords.shape
+
         if self.training and h == self.size[0] and w == self.size[1]:
             emb = self.emb(x)
         else:
@@ -460,11 +462,11 @@ class ImplicitGenerator_tanh(nn.Module):
                 self.emb.learnable_vectors.expand(batch_size, -1, -1, -1),
                 # 调用emb class的self.input!!
                 # -1 means not changing the size of that dimension!!!!
-                coords.permute(0, 2, 3, 1).contiguous(),
+                (coords.permute(0, 2, 3, 1).contiguous()),
                 padding_mode='border', mode='bilinear',
             )
-        ##generate coordinate embedding for 256x512
-        ##[1,512,256,512]
+
+
 
         x = torch.cat([x, emb], 1)
         ##concatenation of Fourier Features and Coordinates Embeddings on channel dimension!!!

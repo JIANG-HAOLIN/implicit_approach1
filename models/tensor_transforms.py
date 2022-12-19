@@ -2,7 +2,7 @@ import random
 
 import torch
 
-device_tensor_transforms = 'cpu'
+device_tensor_transforms = 'cuda'
 
 
 def convert_to_coord_format(b, h, w, device=device_tensor_transforms, integer_values=False):

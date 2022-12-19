@@ -68,6 +68,9 @@ miou_computer = miou_pytorch(opt,dataloader_val)
 
 
 model = models.OASIS_model(opt)
+
+# model.half()
+
 model = models.put_on_multi_gpus(model, opt)
 
 # model = Generator(size=256, hidden_size=512, style_dim=512, n_mlp=8,
@@ -135,12 +138,15 @@ batch_size = opt.batch_size#@jhl
 for epoch in range(start_epoch, opt.num_epochs):
     print('epoch %d' %epoch)
     for i, data_i in enumerate(dataloader_supervised):
+        # torch.cuda.empty_cache()
         print('batch %d' %i)
         if not already_started and i < start_iter:
             continue
         already_started = True
         cur_iter = epoch*len(dataloader_supervised) + i
         image, label, label_map = models.preprocess_input(opt, data_i)
+
+
 
         # label_class_dict = torch.sum((label*label_class_extractor),dim=1,keepdim=True)##don't use this
 
@@ -162,6 +168,13 @@ for epoch in range(start_epoch, opt.num_epochs):
         input_img = image
         real_stack = torch.cat([input_img, coords], 1)
         real_img, converted = real_stack[:, :3], real_stack[:, 3:]
+
+
+        # image.half()
+        # label.half()
+        # label_class_dict.half()
+        # converted.half()
+        # noise[0].half()
 
 
         model.module.netG.zero_grad()

@@ -24,7 +24,7 @@ class BatchNorm2dReimpl(nn.Module):
     See also:
     https://github.com/vacancy/Synchronized-BatchNorm-PyTorch/issues/14
     """
-    def __init__(self, num_features, eps=1e-5, momentum=0.1):
+    def __init__(self, num_features, eps=1e-4, momentum=0.1):
         super().__init__()
 
         self.num_features = num_features

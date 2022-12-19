@@ -410,12 +410,12 @@ class ModulatedConv2d(nn.Module):
                 _, _, height, width = out.shape
                 out = out.view(batch, self.out_channel, height, width)
                 ##apply CLADE layer
-                clade_weight_init = self.clade_weight_modulation(class_style)
-                clade_bias_init = self.clade_bias_modulation(class_style)
+                clade_weight = self.clade_weight_modulation(class_style)
+                clade_bias = self.clade_bias_modulation(class_style)
                 out = self.param_free_norm(out)
-                class_weight = F.embedding(label_class_dict, clade_weight_init).permute(0, 3, 1, 2)
+                clade_weight = F.embedding(label_class_dict.long(), clade_weight).permute(0, 3, 1, 2)
                 #before permute:[n, h, w, c] after permute [n, c, h, w]
-                class_bias = F.embedding(label_class_dict, clade_bias_init).permute(0, 3, 1, 2)
+                clade_bias = F.embedding(label_class_dict.long(), clade_bias).permute(0, 3, 1, 2)
                 # before permute:[n, h, w, c] after permute [n, c, h, w]
 
                 if self.add_dist:
@@ -423,16 +423,19 @@ class ModulatedConv2d(nn.Module):
                     # class_weight = class_weight * (1 + self.dist_conv_w(input_dist))
                     # class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
 
-                    input_dist = dist_map
-                    class_weight= class_weight.to('cpu')
-                    class_bias= class_bias.to('cpu')
-                    alpha_weight = (1 + self.dist_conv_w(input_dist)).to('cpu')
-                    print(alpha_weight.shape)
-                    alpha_bias = 1 + self.dist_conv_b(input_dist).to('cpu')
-                    class_weight = (class_weight * alpha_weight).to('cuda')
-                    class_bias = (class_bias * alpha_bias).to('cuda')
+                    # input_dist = dist_map
+                    # class_weight= class_weight.to('cpu')
+                    # class_bias= class_bias.to('cpu')
+                    # alpha_weight = (1 + self.dist_conv_w(input_dist)).to('cpu')
+                    # print(alpha_weight.shape)
+                    # alpha_bias = 1 + self.dist_conv_b(input_dist).to('cpu')
+                    # class_weight = (class_weight * alpha_weight).to('cuda')
+                    # class_bias = (class_bias * alpha_bias).to('cuda')
 
-                out = out * class_weight + class_bias
+                    clade_weight = (clade_weight * (1 + self.dist_conv_w(dist_map)))
+                    clade_bias = (clade_bias * (1 + self.dist_conv_b(dist_map)))
+
+                out = out * clade_weight + clade_bias
 
 
             ##class_label_dict = [N, H, W]
@@ -442,6 +445,9 @@ class ModulatedConv2d(nn.Module):
                 # print('approach 1 activated')
                 weight = self.weight.view(self.out_channel,in_channel,self.kernel_size,self.kernel_size) ##[512,1024,1,1]
 
+                # print(input.shape,weight.shape)
+
+
                 # input = input.view(1, batch * in_channel, height, width)
                 out = F.conv2d(input, weight, padding=self.padding)
                 # _, _, height, width = out.shape
@@ -449,29 +455,58 @@ class ModulatedConv2d(nn.Module):
 
                 out = self.param_free_norm(out)
 
+                # print(torch.cuda.memory_allocated())
+                # print(torch.cuda.memory_reserved())
+
                 style = style.view(batch, 1, 512).expand(batch, 35, 512)
-                class_style = class_style.view(1, 35, 512).expand(batch, 35, 512)
-                style_concatenation = torch.cat((style, class_style), dim=2).view(batch*35, 1024)
-                clade_weight_init = self.clade_weight_modulation(style_concatenation).view(batch, 35, self.out_channel)
-                clade_bias_init = self.clade_bias_modulation(style_concatenation).view(batch, 35, self.out_channel)
-                class_weight = torch.einsum('nic,nihw->nchw', clade_weight_init, label)
-                class_bias = torch.einsum('nic,nihw->nchw', clade_bias_init, label)
+                # class_style = class_style.view(1, 35, 512).expand(batch, 35, 512)
+                # style = torch.cat((style, class_style), dim=2).view(batch*35, 1024)
+                style = torch.cat((style,class_style.view(1, 35, 512).expand(batch, 35, 512)), dim=2).view(batch * 35, 1024)
+                # print(torch.cuda.memory_allocated())
+                # print(torch.cuda.memory_reserved())
+
+
+                clade_weight = self.clade_weight_modulation(style).view(batch, 35, self.out_channel)
+                clade_bias = self.clade_bias_modulation(style).view(batch, 35, self.out_channel)
+                clade_weight = torch.einsum('nic,nihw->nchw', clade_weight, label)
+                clade_bias = torch.einsum('nic,nihw->nchw', clade_bias, label)
+
+
+                # print(torch.cuda.memory_allocated())
+                # print(torch.cuda.memory_reserved())
+
+
 
                 if self.add_dist:
+
                     # input_dist = F.interpolate(dist_map, size=input.size()[2:], mode='nearest')
-                    #
                     # class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
 
-                    input_dist = dist_map
-                    class_weight = class_weight.to('cpu')
-                    class_bias = class_bias.to('cpu')
-                    alpha_weight = (1 + self.dist_conv_w(input_dist)).to('cpu')
-                    print(alpha_weight.shape)
-                    alpha_bias = 1 + self.dist_conv_b(input_dist).to('cpu')
-                    class_weight = (class_weight * alpha_weight).to('cuda')
-                    class_bias = (class_bias * alpha_bias).to('cuda')
 
-                out = out * class_weight + class_bias
+
+                    # input_dist = dist_map
+                    # class_weight = class_weight.to('cpu')
+                    # class_bias = class_bias.to('cpu')
+                    # alpha_weight = (1 + self.dist_conv_w(input_dist)).to('cpu')
+                    # print(alpha_weight.shape)
+                    # alpha_bias = 1 + self.dist_conv_b(input_dist).to('cpu')
+                    # class_weight = (class_weight * alpha_weight).to('cuda')
+                    # class_bias = (class_bias * alpha_bias).to('cuda')
+
+
+                    clade_weight = (clade_weight * (1 + self.dist_conv_w(dist_map)))
+                    clade_bias = (clade_bias * (1 + self.dist_conv_b(dist_map)))
+
+                    # print(torch.cuda.memory_allocated())
+                    # print(torch.cuda.memory_reserved())
+
+                out = out * clade_weight + clade_bias
+
+
+                torch.cuda.empty_cache()
+
+                # print(torch.cuda.memory_allocated())
+                # print(torch.cuda.memory_reserved())
 
 
             ## brutal Matrix Computation approach
@@ -481,14 +516,28 @@ class ModulatedConv2d(nn.Module):
                 class_style = class_style.view(1, 35, 512)
                 style_addition = style + class_style ##[N, 35, 512]
                 style_addition = style_addition.view(batch*35, 512)
-                style_weight_init = self.modulation(style_addition).view(batch, 35, self.in_channel)
-                pixel_class_style = torch.einsum('nci,nchw->nihw',style_weight_init,label)
+                style_dict = self.modulation(style_addition).view(batch, 35, self.in_channel)
+
+                label = F.interpolate(label,size=(64,128),mode='nearest')
+
+                pixel_class_style = torch.einsum('nci,nchw->nihw',style_dict,label)
+                ###此处必须einsum,若用embedding,label必须为二维map，不能有batchsize这个维度！！
+                # pixel_class_style = F.embedding(label_class_dict, style_init).permute(0, 3, 1, 2)  # [n, c, h, w]
                 weight = self.weight.view(self.out_channel, self.in_channel)
+
+                weight = weight.to('cpu')
+                pixel_class_style = pixel_class_style.to('cpu')
+
                 weight_per_pixel = self.scale * (torch.einsum('oi,nihw->noihw',weight , pixel_class_style))
+
+                weight_per_pixel = weight_per_pixel.to('cuda')
+
+                weight_per_pixel = F.interpolate(weight_per_pixel,size=(256,512),mode='nearest')
                 if self.demodulate:
                     demod = torch.rsqrt(torch.sum(weight_per_pixel.pow(2), dim=2, keepdim=True) + 1e-8)
                     weight_per_pixel = weight_per_pixel * demod
                 out = torch.einsum('nihw,noihw->nohw', input, weight_per_pixel)
+                print('good')
 
 
         return out
@@ -898,7 +947,7 @@ def normalize_dist(offset, normal_mode):
     if normal_mode == 'no':
         return offset
     else:
-        return offset / np.max(np.abs(offset)+1e-5)
+        return offset / np.max(np.abs(offset)+1e-5)##original 1e-5
 
 def show_results(ins):
     plt.imshow(ins)

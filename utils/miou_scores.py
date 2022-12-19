@@ -13,6 +13,10 @@ from utils.drn_segment import drn_105_d_miou
 from utils.upernet_segment import upernet101_miou
 from utils.deeplabV2_segment import deeplab_v2_miou
 
+from models.blocks import make_dist_train_val_cityscapes_datasets as distance_map
+
+miou_scores_device = 'cuda'
+
 # --------------------------------------------------------------------------#
 # This code is an adapted version of https://github.com/mseitzer/pytorch-fid
 # --------------------------------------------------------------------------#
@@ -32,12 +36,25 @@ class miou_pytorch():
             netEMA.eval()
         with torch.no_grad():
             for i, data_i in enumerate(self.val_dataloader):
-                image, label = models.preprocess_input(self.opt, data_i)
-                edges = model.module.compute_edges(image)
+                image, label, label_map = models.preprocess_input(self.opt, data_i)
 
-                label_class_dict = torch.argmax(label, 1).long()
+                dist_map = distance_map(label_map.squeeze(1).to('cpu'), dir='/home/tzt/dataset/cityscapes/',
+                                        norm='norm').to(miou_scores_device)
+
+                label_class_dict = torch.cat((label_map, dist_map), dim=1)
+
+                edges = model.module.compute_edges(image)
                 converted = model.module.coords
                 latent = model.module.latent
+
+                # image.half()
+                # label.half()
+                # label_class_dict.half()
+                # converted.half()
+                # latent[0].half()
+                # edges.half()
+
+
                 if self.opt.no_EMA:
                     generated,_ = netG(label=label,
                                      label_class_dict=label_class_dict,

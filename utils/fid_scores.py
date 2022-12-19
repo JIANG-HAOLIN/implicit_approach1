@@ -9,6 +9,10 @@ import models.models as models
 from utils.fid_folder.inception import InceptionV3
 import matplotlib.pyplot as plt
 
+from models.blocks import make_dist_train_val_cityscapes_datasets as distance_map
+
+fid_scores_device = 'cuda'
+
 # --------------------------------------------------------------------------#
 # This code is an adapted version of https://github.com/mseitzer/pytorch-fid
 # --------------------------------------------------------------------------#
@@ -56,12 +60,26 @@ class fid_pytorch():
             netEMA.eval()
         with torch.no_grad():
             for i, data_i in enumerate(self.val_dataloader):
-                image, label = models.preprocess_input(self.opt, data_i)
+                image, label, label_map = models.preprocess_input(self.opt, data_i)
 
-                label_class_dict = torch.argmax(label, 1).long()
+                dist_map = distance_map(label_map.squeeze(1).to('cpu'), dir='/home/tzt/dataset/cityscapes/',
+                                        norm='norm').to(fid_scores_device)
+
+                label_class_dict = torch.cat((label_map, dist_map), dim=1)
+
                 edges = model.module.compute_edges(image)
                 converted = model.module.coords
                 latent = model.module.latent
+
+                # image.half()
+                # label.half()
+                # label_class_dict.half()
+                # converted.half()
+                # latent[0].half()
+                # edges.half()
+
+
+
                 if self.opt.no_EMA:
                     generated,_ = netG(label=label,
                                      label_class_dict=label_class_dict,
@@ -88,7 +106,7 @@ class fid_pytorch():
             netEMA.train()
         return answer
 
-    def numpy_calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6):
+    def numpy_calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6): ##original eps = 1e-6
         """Numpy implementation of the Frechet Distance.
         Taken from https://github.com/bioinf-jku/TTUR
         The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)

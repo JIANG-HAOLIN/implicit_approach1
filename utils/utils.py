@@ -199,11 +199,21 @@ def update_EMA(model, cur_iter, dataloader, opt, force_run_stats=False):
 
                 converted = model.module.coords
                 latent = model.module.latent
+                edges = model.module.compute_edges(image)
+
+                # image.half()
+                # label.half()
+                # label_class_dict.half()
+                # converted.half()
+                # latent[0].half()
+                # edges.half()
+
+
                 fake,_ = model.module.netEMA(label=label,
                                            label_class_dict=label_class_dict,
                                            coords = converted,
                                            latent = latent,
-                                           edges = model.module.compute_edges(image),
+                                           edges = edges,
                                            )
                 num_upd += 1
                 if num_upd > 50:
