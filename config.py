@@ -53,7 +53,7 @@ def add_all_arguments(parser, train):
     parser.add_argument('--no_3dnoise', action='store_true', default=False, help='if specified, do *not* concatenate noise to label maps')
     parser.add_argument('--z_dim', type=int, default=64, help="dimension of the latent z vector")
     parser.add_argument('--progressive_growing', action='store_true', help="progressive model or normal")
-    parser.add_argument('--netG', type=int, default=1, help="generator architecture")
+    parser.add_argument('--netG', type=int, default=2, help="generator architecture")
     parser.add_argument('--mixed_images', action='store_true', help='mix images for compeletey unpaired training')
     parser.add_argument('--add_edges',action = 'store_true', help='use edges of canny detector as extra intermediate features')
     parser.add_argument('--model_supervision', type=int, default=2,help='use edges of canny detector as extra intermediate features')

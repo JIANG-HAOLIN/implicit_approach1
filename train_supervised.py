@@ -23,10 +23,7 @@ import numpy as np
 from models.blocks import make_dist_train_val_cityscapes_datasets as distance_map
 
 
-# device="cuda"#@jhl
-
-
-
+device="cuda"#@jhl
 
 
 
@@ -42,9 +39,12 @@ opt = config.read_arguments(train=True)
 # opt.add_dist = True
 # opt.dataroot = '/Users/hlj/Documents/NoSync.nosync/FA/cityscapes'
 # opt.gpu_ids = '-1'
-# opt.netG = 2
+# opt.netG = 32
 # opt.batch_size = 2
-device = "cuda"
+
+
+
+
 
 
 

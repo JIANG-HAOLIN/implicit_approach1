@@ -239,19 +239,32 @@ class ModulatedConv2d(nn.Module):
             self.param_free_norm = nn.InstanceNorm2d(self.in_channel, affine=False)  ##jhl
             self.clade_weight_modulation = EqualLinear(style_dim*2, self.out_channel, bias_init=1)  # jhl
             self.clade_bias_modulation = EqualLinear(style_dim*2, self.out_channel, bias_init=1)  # jhl
+        elif self.approach == 1.1:
+            self.param_free_norm = nn.InstanceNorm2d(self.in_channel, affine=False)  ##jhl
+            self.clade_weight_modulation = EqualLinear(style_dim, self.out_channel, bias_init=1)  # jhl
+            self.clade_bias_modulation = EqualLinear(style_dim, self.out_channel, bias_init=1)  # jhl
+        elif self.approach == 1.2:
+            self.param_free_norm = nn.InstanceNorm2d(self.in_channel, affine=False)  ##jhl
+            self.clade_weight_modulation = EqualLinear(style_dim * 2, self.out_channel, bias_init=1)  # jhl
+            self.clade_bias_modulation = EqualLinear(style_dim * 2, self.out_channel, bias_init=1)  # jhl
         elif self.approach == 2:
             pass
         else:
             pass
 
         if self.add_dist :
-            if (self.approach == 0 or self.approach == 1) :
+            if (self.approach == 0 or self.approach == 1 or self.approach == 1.1) :
                 self.dist_conv_w = nn.Conv2d(2, 1, kernel_size=1, padding=0)
                 nn.init.zeros_(self.dist_conv_w.weight)
                 nn.init.zeros_(self.dist_conv_w.bias)
                 self.dist_conv_b = nn.Conv2d(2, 1, kernel_size=1, padding=0)
                 nn.init.zeros_(self.dist_conv_b.weight)
                 nn.init.zeros_(self.dist_conv_b.bias)
+            elif self.approach == 1.2:
+
+                self.dist_conv_w = LFF(self.out_channel)
+                self.dist_conv_b = LFF(self.out_channel)
+
             elif self.approach ==2 :
                 pass
             else:
@@ -462,6 +475,7 @@ class ModulatedConv2d(nn.Module):
                 # class_style = class_style.view(1, 35, 512).expand(batch, 35, 512)
                 # style = torch.cat((style, class_style), dim=2).view(batch*35, 1024)
                 style = torch.cat((style,class_style.view(1, 35, 512).expand(batch, 35, 512)), dim=2).view(batch * 35, 1024)
+                ###此处使用view是因为输入linear layer只能是2维！！
                 # print(torch.cuda.memory_allocated())
                 # print(torch.cuda.memory_reserved())
 
@@ -470,7 +484,7 @@ class ModulatedConv2d(nn.Module):
                 clade_bias = self.clade_bias_modulation(style).view(batch, 35, self.out_channel)
                 clade_weight = torch.einsum('nic,nihw->nchw', clade_weight, label)
                 clade_bias = torch.einsum('nic,nihw->nchw', clade_bias, label)
-
+                ###若用embedding weight必须为2维！！！
 
                 # print(torch.cuda.memory_allocated())
                 # print(torch.cuda.memory_reserved())
@@ -507,6 +521,45 @@ class ModulatedConv2d(nn.Module):
 
                 # print(torch.cuda.memory_allocated())
                 # print(torch.cuda.memory_reserved())
+
+
+
+            if self.approach == 1.1:
+                weight = self.weight.view(self.out_channel,in_channel,self.kernel_size,self.kernel_size) ##[512,1024,1,1]
+                out = F.conv2d(input, weight, padding=self.padding)
+                out = self.param_free_norm(out)
+                clade_weight = self.clade_weight_modulation(class_style)
+                clade_bias = self.clade_bias_modulation(class_style)
+                clade_weight = F.embedding(label_class_dict.long(), clade_weight).permute(0, 3, 1, 2)
+                clade_bias = F.embedding(label_class_dict.long(), clade_bias).permute(0, 3, 1, 2)
+                if self.add_dist:
+                    clade_weight = (clade_weight * (1 + self.dist_conv_w(dist_map)))
+                    clade_bias = (clade_bias * (1 + self.dist_conv_b(dist_map)))
+                out = out * clade_weight + clade_bias
+
+
+                torch.cuda.empty_cache()
+
+
+
+            if self.approach == 1.2:
+                weight = self.weight.view(self.out_channel,in_channel,self.kernel_size,self.kernel_size)
+                out = F.conv2d(input, weight, padding=self.padding)
+                out = self.param_free_norm(out)
+                style = style.view(batch, 1, 512).expand(batch, 35, 512)
+                style = torch.cat((style,class_style.view(1, 35, 512).expand(batch, 35, 512)), dim=2).view(batch * 35, 1024)
+                ###此处使用view是因为输入linear layer只能是2维！！clade_weight = self.clade_weight_modulation(style).view(batch, 35, self.out_channel)
+                clade_weight = self.clade_weight_modulation(style).view(batch, 35, self.out_channel)
+                clade_bias = self.clade_bias_modulation(style).view(batch, 35, self.out_channel)
+                # clade_weight = F.embedding(label_class_dict.long(), clade_weight).permute(0, 3, 1, 2)
+                # clade_bias = F.embedding(label_class_dict.long(), clade_bias).permute(0, 3, 1, 2)
+                clade_weight = torch.einsum('nic,nihw->nchw', clade_weight, label)
+                clade_bias = torch.einsum('nic,nihw->nchw', clade_bias, label)
+
+                if self.add_dist:
+                    clade_weight = (clade_weight * (1 + self.dist_conv_w(dist_map[:,2:,:,:])))
+                    clade_bias = (clade_bias * (1 + self.dist_conv_b(dist_map[:,2:,:,:])))
+                out = out * clade_weight + clade_bias
 
 
             ## brutal Matrix Computation approach
@@ -823,6 +876,18 @@ class LFF(nn.Module):
     def __init__(self, hidden_size, ):
         super(LFF, self).__init__()
         self.ffm = ConLinear(2, hidden_size, is_first=True)
+        self.activation = SinActivation()
+
+    def forward(self, x):
+        x = self.ffm(x)
+        x = self.activation(x)
+        return x
+
+
+class LFF_4ch(nn.Module):
+    def __init__(self, hidden_size, ):
+        super(LFF_4ch, self).__init__()
+        self.ffm = ConLinear(4, hidden_size, is_first=True)
         self.activation = SinActivation()
 
     def forward(self, x):
