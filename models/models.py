@@ -48,11 +48,8 @@ class OASIS_model(nn.Module):
             self.netG = generators.ImplicitGenerator_multiscale_(opt=opt,size=(8,16), hidden_size=512, style_dim=512, n_mlp=8,
                                   activation=None, channel_multiplier=2)
 
-        elif opt.netG == 31:
+        elif opt.netG == 4:
             self.netG = generators.ImplicitGenerator_2scale_(opt=opt, size=(128,256), hidden_size=512, style_dim=512,n_mlp=8,
-                                  activation=None, channel_multiplier=2)
-        elif opt.netG == 32:
-            self.netG = generators.ImplicitGenerator_multi_scale(opt=opt,size=(256,512), hidden_size=512, style_dim=512, n_mlp=8,
                                   activation=None, channel_multiplier=2)
         else:
             self.netG = generators.OASIS_Generator(opt)
